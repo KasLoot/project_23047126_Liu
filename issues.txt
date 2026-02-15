@@ -1,0 +1,4 @@
+rgb_only/COMP0248_Manuel de Castro Ribeiro Jardim/G08_rock/clip04 is missing one annotation and its corresponding image. Also, for all existing annotations, the annotation image names are not matched and I fixed them by hand.
+25047621_Wu folder format incorrect, I fixed it by hand.
+
+18006111_Shihab: original images missing (the corresponding original image of the annotation image is the same as the annotation image)
