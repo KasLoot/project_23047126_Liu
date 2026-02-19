@@ -379,6 +379,7 @@ class YOLO11_v2(nn.Module):
         x = torch.nn.functional.adaptive_avg_pool2d(x, (1, 1))
         x = x.view(x.size(0), -1)
         x = self.fc1(x)
+        x = torch.nn.functional.rms_norm(x, normalized_shape=x.shape[1:])
         x = torch.nn.functional.relu(x)
         x = self.fc2(x)
         x = torch.nn.functional.softmax(x, dim=1)

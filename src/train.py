@@ -242,9 +242,9 @@ def main() -> None:
 	# summary(model, input_size=(16, 3, 224, 224))
 
 	criterion = torch.nn.CrossEntropyLoss()
-	optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
+	optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-4)
 
-	num_epochs = 20
+	num_epochs = 50
 	best_val_acc = 0.0
 	best_ckpt_path = os.path.join(output_dir, "best_yolov11_v2_gesture.pt")
 
