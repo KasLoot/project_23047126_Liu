@@ -2,6 +2,11 @@ import os
 import shutil
 import json
 
+import PIL.Image as Image
+import numpy as np
+import torch
+
+from tqdm import tqdm
 
 
 def combine_dataset():
@@ -142,9 +147,65 @@ def combine_dataset():
     # ...existing code...
 
 
+def image_to_tensor_dataset():
+    images_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/images"
+    masks_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/masks"
+    all_in_one_tensor_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/all_in_one_tensors"
+    os.makedirs(all_in_one_tensor_path, exist_ok=True)
+
+    image_tensor_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/image_tensors"
+    mask_tensor_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/mask_tensors"
+    os.makedirs(image_tensor_path, exist_ok=True)
+    os.makedirs(mask_tensor_path, exist_ok=True)
+
+    annotation_json_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/annotations/all_annotations.json"
+    annotation_json = json.load(open(annotation_json_path, "r"))
+
+    image_tensor_all = []
+    mask_tensor_all = []
+
+    for image_object in tqdm(annotation_json, desc="Processing images"):
+        image_name = image_object["new_image_file"]
+        image_index = os.path.splitext(image_name)[0]
+        image_file_path = os.path.join(images_path, image_name)
+        # mask_file_path = os.path.join(masks_path, image_name)
+
+        if os.path.exists(image_file_path):
+            image = Image.open(image_file_path).convert("RGB")
+            # convert image to tensor and normalize
+            image_tensor = torch.from_numpy(np.array(image)).permute(2, 0, 1).float() / 255.0
+            torch.save(image_tensor, os.path.join(image_tensor_path, f"{image_index}.pt"))
+            image_tensor_all.append(image_tensor)
+
+            
+    image_tensor_all = torch.stack(image_tensor_all)
+    # torch.save(image_tensor_all, os.path.join(all_in_one_tensor_path, "image_tensors.pt"))
+    print(f"Saved image tensors to {os.path.join(all_in_one_tensor_path, 'image_tensors.pt')}")
+
+
+    for image_object in tqdm(annotation_json, desc="Processing masks"):
+        image_name = image_object["new_image_file"]
+        image_index = os.path.splitext(image_name)[0]
+        # image_file_path = os.path.join(images_path, image_name)
+        mask_file_path = os.path.join(masks_path, image_name)
+
+        if os.path.exists(mask_file_path):
+            mask = Image.open(mask_file_path).convert("L")
+            # convert image to tensor and normalize
+            mask_tensor = torch.from_numpy(np.array(mask)).unsqueeze(0).float() / 255.0
+            torch.save(mask_tensor, os.path.join(mask_tensor_path, f"{image_index}.pt"))
+            mask_tensor_all.append(mask_tensor)
+
+
+    
+    mask_tensor_all = torch.stack(mask_tensor_all)
+    # torch.save(mask_tensor_all, os.path.join(all_in_one_tensor_path, "mask_tensors.pt"))
+    print(f"Saved mask tensors to {os.path.join(all_in_one_tensor_path, 'mask_tensors.pt')}")
+
 
 
 
 
 if __name__ == "__main__":
-    combine_dataset()
+    # combine_dataset()
+    image_to_tensor_dataset()

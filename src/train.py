@@ -159,6 +159,10 @@ def visualize_predictions(
 	save_path: str | None = None,
 ) -> None:
 	model.eval()
+	# HandGestureDataset normalizes images with ImageNet stats.
+	# Undo that normalization before plotting to get correct colors.
+	imagenet_mean = torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(3, 1, 1)
+	imagenet_std = torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).view(3, 1, 1)
 
 	images_shown = 0
 	cols = 4
@@ -176,12 +180,14 @@ def visualize_predictions(
 			if images_shown >= num_samples:
 				break
 
-			img = images[i].detach().cpu().permute(1, 2, 0).numpy()
+			img = images[i].detach().cpu()
+			img = (img * imagenet_std + imagenet_mean).clamp(0.0, 1.0)
+			img = img.permute(1, 2, 0).numpy()
 			gt = int(class_ids[i].item())
 			pred = int(preds[i].item())
 
 			ax = axes[images_shown]
-			ax.imshow(np.clip(img, 0.0, 1.0))
+			ax.imshow(img)
 			ax.set_title(f"GT: {class_names[gt]}\nPred: {class_names[pred]}")
 			ax.axis("off")
 			images_shown += 1
@@ -246,7 +252,7 @@ def main() -> None:
 
 	num_epochs = 50
 	best_val_acc = 0.0
-	best_ckpt_path = os.path.join(output_dir, "best_yolov11_v2_gesture.pt")
+	best_ckpt_path = os.path.join(output_dir, "best_yolov11_v2_gesture_3.pt")
 
 	for epoch in range(1, num_epochs + 1):
 		train_metrics = run_one_epoch(
