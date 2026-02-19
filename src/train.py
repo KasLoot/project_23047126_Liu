@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from dataloader import HandGestureDataset, check_image_mask_resolutions
 from mambavision import MambaVision
-from cnn_model_1 import CNNModel_1
+from cnn_model_1 import YOLO11_v2, YOLOv11
 
 
 GESTURE_NAMES = [
@@ -34,12 +34,61 @@ def set_seed(seed: int = 42) -> None:
 	torch.cuda.manual_seed_all(seed)
 
 
+def to_classification_logits(model_output: torch.Tensor | list | tuple, num_classes: int) -> torch.Tensor:
+	"""
+	Convert different model output formats into classification logits with shape [B, num_classes].
+
+	This supports:
+	- standard classifier output: Tensor[B, C]
+	- dense predictions: Tensor[B, C, A] or Tensor[B, C, H, W]
+	- multi-scale outputs: list/tuple of dense prediction tensors
+	"""
+	if isinstance(model_output, torch.Tensor):
+		if model_output.ndim == 2:
+			if model_output.shape[1] != num_classes:
+				raise ValueError(
+					f"Expected logits with {num_classes} classes, got shape {tuple(model_output.shape)}"
+				)
+			return model_output
+
+		if model_output.ndim == 3:
+			# [B, C, A] -> aggregate over anchors/locations
+			return model_output[:, -num_classes:, :].amax(dim=-1)
+
+		if model_output.ndim == 4:
+			# [B, C, H, W] -> aggregate over spatial dims
+			return model_output[:, -num_classes:, :, :].amax(dim=(-1, -2))
+
+		raise ValueError(f"Unsupported tensor output shape: {tuple(model_output.shape)}")
+
+	if isinstance(model_output, (list, tuple)):
+		if len(model_output) == 0:
+			raise ValueError("Received empty model output list/tuple")
+
+		scale_logits: list[torch.Tensor] = []
+		for out in model_output:
+			if not isinstance(out, torch.Tensor):
+				raise TypeError(f"Unsupported output type in list/tuple: {type(out)}")
+			if out.ndim == 4:
+				scale_logits.append(out[:, -num_classes:, :, :].amax(dim=(-1, -2)))
+			elif out.ndim == 3:
+				scale_logits.append(out[:, -num_classes:, :].amax(dim=-1))
+			else:
+				raise ValueError(f"Unsupported output tensor in list/tuple: shape={tuple(out.shape)}")
+
+		# Average logits from all scales
+		return torch.stack(scale_logits, dim=0).mean(dim=0)
+
+	raise TypeError(f"Unsupported model output type: {type(model_output)}")
+
+
 def run_one_epoch(
 	model: torch.nn.Module,
 	dataloader: DataLoader,
 	criterion: torch.nn.Module,
 	optimizer: torch.optim.Optimizer,
 	device: torch.device,
+	num_classes: int,
 ) -> Dict[str, float]:
 	model.train()
 	running_loss = 0.0
@@ -52,6 +101,8 @@ def run_one_epoch(
 
 		optimizer.zero_grad(set_to_none=True)
 		logits = model(images)
+		# print(f"logits: {logits.shape}, _2: {_2.shape}, _3: {_3.shape}")
+		# print(f"class_ids: {class_ids.shape}")
 		loss = criterion(logits, class_ids)
 		loss.backward()
 		optimizer.step()
@@ -73,6 +124,7 @@ def evaluate(
 	dataloader: DataLoader,
 	criterion: torch.nn.Module,
 	device: torch.device,
+	num_classes: int,
 ) -> Dict[str, float]:
 	model.eval()
 	running_loss = 0.0
@@ -83,7 +135,7 @@ def evaluate(
 		images = images.to(device)
 		class_ids = class_ids.to(device)
 
-		logits = model(images)
+		logits = to_classification_logits(model(images), num_classes=num_classes)
 		loss = criterion(logits, class_ids)
 
 		running_loss += loss.item() * images.size(0)
@@ -117,7 +169,7 @@ def visualize_predictions(
 	for images, _masks, class_ids in dataloader:
 		images = images.to(device)
 		class_ids = class_ids.to(device)
-		logits = model(images)
+		logits = to_classification_logits(model(images), num_classes=len(class_names))
 		preds = logits.argmax(dim=1)
 
 		for i in range(images.size(0)):
@@ -166,8 +218,8 @@ def main() -> None:
 		generator=torch.Generator().manual_seed(42),
 	)
 
-	train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
-	val_dataloader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)
+	train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
+	val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4)
 
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	print(f"Using device: {device}")
@@ -183,19 +235,35 @@ def main() -> None:
 	# 	drop_path_rate=0.1,
 	# ).to(device)
 
-	model = CNNModel_1(num_classes=10).to(device)
+	model = YOLO11_v2().to(device)
 
+	# from torchinfo import summary
+
+	# summary(model, input_size=(16, 3, 224, 224))
 
 	criterion = torch.nn.CrossEntropyLoss()
 	optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
 
 	num_epochs = 20
 	best_val_acc = 0.0
-	best_ckpt_path = os.path.join(output_dir, "best_mambavision_gesture.pt")
+	best_ckpt_path = os.path.join(output_dir, "best_yolov11_v2_gesture.pt")
 
 	for epoch in range(1, num_epochs + 1):
-		train_metrics = run_one_epoch(model, train_dataloader, criterion, optimizer, device)
-		val_metrics = evaluate(model, val_dataloader, criterion, device)
+		train_metrics = run_one_epoch(
+			model,
+			train_dataloader,
+			criterion,
+			optimizer,
+			device,
+			num_classes=len(GESTURE_NAMES),
+		)
+		val_metrics = evaluate(
+			model,
+			val_dataloader,
+			criterion,
+			device,
+			num_classes=len(GESTURE_NAMES),
+		)
 
 		print(
 			f"Epoch [{epoch:02d}/{num_epochs}] | "

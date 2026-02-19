@@ -68,6 +68,10 @@ class HandGestureDataset(Dataset):
         image_path = os.path.join(self.images_dir, self.image_files[idx])
         mask_path = os.path.join(self.masks_dir, self.mask_files[idx])
 
+        # get the image file name without extension to match with annotation
+        image_name = int(os.path.splitext(self.image_files[idx])[0])
+        
+
         image = Image.open(image_path).convert("RGB")
         mask = Image.open(mask_path).convert("L")
 
@@ -80,7 +84,7 @@ class HandGestureDataset(Dataset):
         image = F.normalize(image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
         mask = torch.from_numpy(np.array(mask, dtype=np.int64))
-        class_id = self.annotation_json[idx]["gesture_id"]
+        class_id = self.annotation_json[image_name]["gesture_id"]
         """class_id = 0: call
            class_id = 1: dislike
            class_id = 2: like
@@ -92,6 +96,8 @@ class HandGestureDataset(Dataset):
            class_id = 8: stop
            class_id = 9: three
         """
+
+        # print(f"Loaded sample {idx}: image file {image_path}, mask file {mask_path}, class_id {class_id}, image name {image_name}, idx {idx}")
 
         return image, mask, class_id
 
