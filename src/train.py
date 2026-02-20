@@ -333,8 +333,8 @@ def main() -> None:
 	# from torchinfo import summary
 
 	# summary(model, input_size=(16, 3, 224, 224))
-	num_epochs = 50
-	criterion = torch.nn.CrossEntropyLoss()
+	num_epochs = 100
+	criterion = torch.nn.CrossEntropyLoss(label_smoothing=0.1)
 	optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-3)
 
 	scheduler = torch.optim.lr_scheduler.SequentialLR(

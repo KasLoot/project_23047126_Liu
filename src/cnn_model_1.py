@@ -393,17 +393,17 @@ class YOLO11_v2(nn.Module):
     def __init__(self, num_classes=10, dropout=0.3):
         super().__init__()
         self.darknet = DarkNet(
-            width=[3, 16, 32, 64, 128, 256],
+            width=[3, 32, 64, 128, 256, 512],
             depth=[1, 1, 1, 1, 1, 1],
             csp=[False, True],
         )
         self.fpn = DarkFPN(
-            width=[3, 16, 32, 64, 128, 256],
+            width=[3, 32, 64, 128, 256, 512],
             depth=[1, 1, 1, 1, 1, 1],
             csp=[False, True],
         )
         # p3 has 64 channels, p4 has 128, p5 has 256 → total 448
-        self.fc1 = torch.nn.Linear(64 + 128 + 256, 128)
+        self.fc1 = torch.nn.Linear((64 + 128 + 256)*2, 128)
         self.dropout = torch.nn.Dropout(dropout)
         self.fc2 = torch.nn.Linear(128, num_classes)
 
