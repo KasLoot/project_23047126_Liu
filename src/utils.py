@@ -161,8 +161,9 @@ def image_to_tensor_dataset():
     annotation_json_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/annotations/all_annotations.json"
     annotation_json = json.load(open(annotation_json_path, "r"))
 
-    image_tensor_all = []
-    mask_tensor_all = []
+    # image_tensor_all = []
+    # mask_tensor_all = []
+    # class_id_all = []
 
     for image_object in tqdm(annotation_json, desc="Processing images"):
         image_name = image_object["new_image_file"]
@@ -175,12 +176,12 @@ def image_to_tensor_dataset():
             # convert image to tensor and normalize
             image_tensor = torch.from_numpy(np.array(image)).permute(2, 0, 1).float() / 255.0
             torch.save(image_tensor, os.path.join(image_tensor_path, f"{image_index}.pt"))
-            image_tensor_all.append(image_tensor)
+                # image_tensor_all.append(image_tensor)
 
             
-    image_tensor_all = torch.stack(image_tensor_all)
+    # image_tensor_all = torch.stack(image_tensor_all)
     # torch.save(image_tensor_all, os.path.join(all_in_one_tensor_path, "image_tensors.pt"))
-    print(f"Saved image tensors to {os.path.join(all_in_one_tensor_path, 'image_tensors.pt')}")
+    # print(f"Saved image tensors to {os.path.join(all_in_one_tensor_path, 'image_tensors.pt')}")
 
 
     for image_object in tqdm(annotation_json, desc="Processing masks"):
@@ -192,15 +193,20 @@ def image_to_tensor_dataset():
         if os.path.exists(mask_file_path):
             mask = Image.open(mask_file_path).convert("L")
             # convert image to tensor and normalize
+            # t = torch.from_numpy(np.array(mask))
+            # print("dtype:", t.dtype)
+            # print("min/max:", t.min().item(), t.max().item())
+            # print("unique count:", torch.unique(t).numel())
+            # print("is binary (0/255):", torch.all((t == 0) | (t == 255)).item())
             mask_tensor = torch.from_numpy(np.array(mask)).unsqueeze(0).float() / 255.0
             torch.save(mask_tensor, os.path.join(mask_tensor_path, f"{image_index}.pt"))
-            mask_tensor_all.append(mask_tensor)
+            # mask_tensor_all.append(mask_tensor)
 
 
     
-    mask_tensor_all = torch.stack(mask_tensor_all)
+    # mask_tensor_all = torch.stack(mask_tensor_all)
     # torch.save(mask_tensor_all, os.path.join(all_in_one_tensor_path, "mask_tensors.pt"))
-    print(f"Saved mask tensors to {os.path.join(all_in_one_tensor_path, 'mask_tensors.pt')}")
+    # print(f"Saved mask tensors to {os.path.join(all_in_one_tensor_path, 'mask_tensors.pt')}")
 
 
 

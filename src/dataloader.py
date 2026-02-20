@@ -17,89 +17,135 @@ import torchvision.transforms.functional as F
 from torchvision.transforms import InterpolationMode
 
 
-# class SegAugment:
-#     def __init__(self, out_size=(640, 480)):
-#         self.out_size = out_size
+class SegAugment:
+    def __init__(self, out_size=(640, 480)):
+        self.out_size = out_size
 
-#     def __call__(self, image, mask):
-#         # --- same geometric transform for both ---
-#         # if random.random() < 0.5:
-#         #     image = F.hflip(image)
-#         #     mask = F.hflip(mask)
+    def __call__(self, image, mask):
+        # --- same geometric transform for both ---
+        # if random.random() < 0.5:
+        #     image = F.hflip(image)
+        #     mask = F.hflip(mask)
 
-#         # if random.random() < 0.5:
-#         #     image = F.vflip(image)
-#         #     mask = F.vflip(mask)
+        # if random.random() < 0.5:
+        #     image = F.vflip(image)
+        #     mask = F.vflip(mask)
 
-#         # angle = random.uniform(-15, 15)
-#         # image = F.rotate(image, angle, interpolation=InterpolationMode.BILINEAR)
-#         # mask = F.rotate(mask, angle, interpolation=InterpolationMode.NEAREST)
+        angle = random.uniform(-10, 10)
+        image = F.rotate(image, angle, interpolation=InterpolationMode.BILINEAR)
+        mask = F.rotate(mask, angle, interpolation=InterpolationMode.NEAREST)
 
-#         image = F.resize(image, self.out_size, interpolation=InterpolationMode.BILINEAR)
-#         mask = F.resize(mask, self.out_size, interpolation=InterpolationMode.NEAREST)
+        image = F.resize(image, self.out_size, interpolation=InterpolationMode.BILINEAR)
+        mask = F.resize(mask, self.out_size, interpolation=InterpolationMode.NEAREST)
 
-#         # --- image-only appearance transforms ---
-#         if random.random() < 0.5:
-#             image = F.adjust_brightness(image, brightness_factor=random.uniform(0.8, 1.2))
-#         if random.random() < 0.5:
-#             image = F.adjust_contrast(image, contrast_factor=random.uniform(0.8, 1.2))
+        # --- image-only appearance transforms ---
+        if random.random() < 0.5:
+            image = F.adjust_brightness(image, brightness_factor=random.uniform(0.8, 1.2))
+        if random.random() < 0.5:
+            image = F.adjust_contrast(image, contrast_factor=random.uniform(0.8, 1.2))
 
-#         # To tensor
-#         image = F.to_tensor(image)  # float [0,1], shape [3,H,W]
-#         mask = torch.from_numpy(np.array(mask, dtype=np.int64))  # shape [H,W], class ids
 
-#         return image, mask
+        return image, mask
+
+
+# class HandGestureDataset(Dataset):
+#     def __init__(self, dataset_path, transform=None):
+#         self.images_dir = os.path.join(dataset_path, "images")
+#         self.masks_dir = os.path.join(dataset_path, "masks")
+#         self.annotation_json_path = os.path.join(dataset_path, "annotations", "all_annotations.json")
+#         self.annotation_json = json.load(open(self.annotation_json_path, "r"))
+#         self.image_files = sorted(os.listdir(self.images_dir))
+#         self.mask_files = sorted(os.listdir(self.masks_dir))
+#         self.transform = transform
+
+#     def __len__(self):
+#         return len(self.image_files)
+
+#     def __getitem__(self, idx):
+#         image_path = os.path.join(self.images_dir, self.image_files[idx])
+#         mask_path = os.path.join(self.masks_dir, self.mask_files[idx])
+
+#         # get the image file name without extension to match with annotation
+#         image_name = int(os.path.splitext(self.image_files[idx])[0])
+        
+
+#         image = Image.open(image_path).convert("RGB")
+#         mask = Image.open(mask_path).convert("L")
+
+#         # if self.transform is not None:
+#         #     image, mask = self.transform(image, mask)
+#         # else:
+
+#         image = F.to_tensor(image)
+#         # normalize to [0,1] and convert to tensor
+#         image = F.normalize(image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+#         mask = torch.from_numpy(np.array(mask, dtype=np.int64))
+#         class_id = self.annotation_json[image_name]["gesture_id"]
+#         """class_id = 0: call
+#            class_id = 1: dislike
+#            class_id = 2: like
+#            class_id = 3: ok
+#            class_id = 4: one
+#            class_id = 5: palm
+#            class_id = 6: peace
+#            class_id = 7: rock
+#            class_id = 8: stop
+#            class_id = 9: three
+#         """
+
+#         # print(f"Loaded sample {idx}: image file {image_path}, mask file {mask_path}, class_id {class_id}, image name {image_name}, idx {idx}")
+
+#         return image, mask, class_id
 
 
 class HandGestureDataset(Dataset):
     def __init__(self, dataset_path, transform=None):
-        self.images_dir = os.path.join(dataset_path, "images")
-        self.masks_dir = os.path.join(dataset_path, "masks")
+        self.images_tensor_dir = os.path.join(dataset_path, "image_tensors")
+        self.masks_tensor_dir = os.path.join(dataset_path, "mask_tensors")
+
+        # num_samples = number of .pt files in the image_tensors directory
+        self.num_samples = len(os.listdir(self.images_tensor_dir))
+        self.all_image_tensors = torch.stack([torch.load(os.path.join(self.images_tensor_dir, f"{i}.pt")) for i in range(self.num_samples)])
+        self.all_mask_tensors = torch.stack([torch.load(os.path.join(self.masks_tensor_dir, f"{i}.pt")) for i in range(self.num_samples)])
+
         self.annotation_json_path = os.path.join(dataset_path, "annotations", "all_annotations.json")
         self.annotation_json = json.load(open(self.annotation_json_path, "r"))
-        self.image_files = sorted(os.listdir(self.images_dir))
-        self.mask_files = sorted(os.listdir(self.masks_dir))
+
+        assert self.all_image_tensors.shape[0] == self.all_mask_tensors.shape[0], "Number of image tensors and mask tensors must be the same"
+        assert self.num_samples == self.all_image_tensors.shape[0] == self.all_mask_tensors.shape[0], "num_samples must match the number of loaded tensors"
+        assert self.num_samples == len(self.annotation_json), "num_samples must match the number of annotations in the JSON file"
+
+        print(f"Loaded {self.num_samples} samples from {dataset_path}")
+
         self.transform = transform
-
-    def __len__(self):
-        return len(self.image_files)
-
-    def __getitem__(self, idx):
-        image_path = os.path.join(self.images_dir, self.image_files[idx])
-        mask_path = os.path.join(self.masks_dir, self.mask_files[idx])
-
-        # get the image file name without extension to match with annotation
-        image_name = int(os.path.splitext(self.image_files[idx])[0])
         
 
-        image = Image.open(image_path).convert("RGB")
-        mask = Image.open(mask_path).convert("L")
+    def __len__(self):
+        return self.num_samples
 
-        # if self.transform is not None:
-        #     image, mask = self.transform(image, mask)
-        # else:
+    def __getitem__(self, idx):
+        image_tensor = self.all_image_tensors[idx]
+        mask_tensor = self.all_mask_tensors[idx]
+        class_id = self.annotation_json[idx]["gesture_id"]
 
-        image = F.to_tensor(image)
-        # normalize to [0,1] and convert to tensor
-        image = F.normalize(image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        if self.transform is not None:
+            image_tensor, mask_tensor = self.transform(image_tensor, mask_tensor)
 
-        mask = torch.from_numpy(np.array(mask, dtype=np.int64))
-        class_id = self.annotation_json[image_name]["gesture_id"]
-        """class_id = 0: call
-           class_id = 1: dislike
-           class_id = 2: like
-           class_id = 3: ok
-           class_id = 4: one
-           class_id = 5: palm
-           class_id = 6: peace
-           class_id = 7: rock
-           class_id = 8: stop
-           class_id = 9: three
-        """
+        return image_tensor, mask_tensor, class_id
 
-        # print(f"Loaded sample {idx}: image file {image_path}, mask file {mask_path}, class_id {class_id}, image name {image_name}, idx {idx}")
 
-        return image, mask, class_id
+
+
+
+
+
+
+
+
+
+
+
 
 
 def check_image_mask_resolutions(dataset_path, show_examples=10):

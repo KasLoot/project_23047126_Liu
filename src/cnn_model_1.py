@@ -259,11 +259,11 @@ class DarkFPN(torch.nn.Module):
 
     def forward(self, x):
         p3, p4, p5 = x
-        # p4 = self.h1(torch.cat(tensors=[self.up(p5), p4], dim=1))
+        p4 = self.h1(torch.cat(tensors=[self.up(p5), p4], dim=1))
         p3 = self.h2(torch.cat(tensors=[self.up(p4), p3], dim=1))
-        # p4 = self.h4(torch.cat(tensors=[self.h3(p3), p4], dim=1))
-        # p5 = self.h6(torch.cat(tensors=[self.h5(p4), p5], dim=1))
-        return p3
+        p4 = self.h4(torch.cat(tensors=[self.h3(p3), p4], dim=1))
+        p5 = self.h6(torch.cat(tensors=[self.h5(p4), p5], dim=1))
+        return p3, p4, p5
 
 
 
@@ -365,24 +365,64 @@ class Head(torch.nn.Module):
 
 
 
-class YOLO11_v2(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.darknet = DarkNet(width=[3, 16, 32, 64, 128, 256], depth=[1, 1, 1, 1, 1, 1], csp=[False, True])
-        self.fpn = DarkFPN(width=[3, 16, 32, 64, 128, 256], depth=[1, 1, 1, 1, 1, 1], csp=[False, True])
-        self.fc1 = torch.nn.Linear(64, 128)
-        self.fc2 = torch.nn.Linear(128, 10)
+# class YOLO11_v2(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.darknet = DarkNet(width=[3, 16, 32, 64, 128, 256], depth=[1, 1, 1, 1, 1, 1], csp=[False, True])
+#         self.fpn = DarkFPN(width=[3, 16, 32, 64, 128, 256], depth=[1, 1, 1, 1, 1, 1], csp=[False, True])
+#         self.fc1 = torch.nn.Linear(64, 128)
+#         self.fc2 = torch.nn.Linear(128, 10)
+#         self.dropout = torch.nn.Dropout(0.5)
     
+#     def forward(self, x):
+#         x = self.darknet(x)
+#         x = self.fpn(x)
+#         x = torch.nn.functional.adaptive_avg_pool2d(x, (1, 1))
+#         x = x.view(x.size(0), -1)
+#         x = self.fc1(x)
+#         x = torch.nn.functional.rms_norm(x, normalized_shape=x.shape[1:])
+#         x = torch.nn.functional.relu(x)
+#         x = self.dropout(x)
+#         x = self.fc2(x)
+#         # x = torch.nn.functional.softmax(x, dim=1)
+#         return x
+
+
+
+class YOLO11_v2(nn.Module):
+    def __init__(self, num_classes=10, dropout=0.3):
+        super().__init__()
+        self.darknet = DarkNet(
+            width=[3, 16, 32, 64, 128, 256],
+            depth=[1, 1, 1, 1, 1, 1],
+            csp=[False, True],
+        )
+        self.fpn = DarkFPN(
+            width=[3, 16, 32, 64, 128, 256],
+            depth=[1, 1, 1, 1, 1, 1],
+            csp=[False, True],
+        )
+        # p3 has 64 channels, p4 has 128, p5 has 256 → total 448
+        self.fc1 = torch.nn.Linear(64 + 128 + 256, 128)
+        self.dropout = torch.nn.Dropout(dropout)
+        self.fc2 = torch.nn.Linear(128, num_classes)
+
     def forward(self, x):
-        x = self.darknet(x)
-        x = self.fpn(x)
-        x = torch.nn.functional.adaptive_avg_pool2d(x, (1, 1))
-        x = x.view(x.size(0), -1)
+        p3, p4, p5 = self.fpn(self.darknet(x))
+
+        # Global average pool each scale: [B, C, H, W] → [B, C]
+        p3 = torch.nn.functional.adaptive_avg_pool2d(p3, 1).flatten(1)
+        p4 = torch.nn.functional.adaptive_avg_pool2d(p4, 1).flatten(1)
+        p5 = torch.nn.functional.adaptive_avg_pool2d(p5, 1).flatten(1)
+
+        # Concatenate along channel dim: [B, 64+128+256] = [B, 448]
+        x = torch.cat([p3, p4, p5], dim=1)
+
         x = self.fc1(x)
         x = torch.nn.functional.rms_norm(x, normalized_shape=x.shape[1:])
         x = torch.nn.functional.relu(x)
+        x = self.dropout(x)
         x = self.fc2(x)
-        x = torch.nn.functional.softmax(x, dim=1)
         return x
 
 
