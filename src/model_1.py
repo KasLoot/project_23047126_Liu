@@ -394,6 +394,138 @@ class YOLO26(nn.Module):
         return self.detect([n3, n4_out, n5_out])
 
 
+
+class YOLO26MultiTask(nn.Module):
+    def __init__(self, yolo_weights_path=None, num_classes=10, end2end=True):
+        super().__init__()
+        
+        # 1. Load the base YOLO26 model (Scale "n" based on your config)
+        self.backbone = YOLO26(nc=num_classes, scale="n", end2end=end2end)
+        
+        if yolo_weights_path:
+            ckpt = torch.load(yolo_weights_path, map_location="cpu")
+            self.backbone.load_state_dict(ckpt["model"])
+            print(f"Loaded pretrained YOLO26 weights from {yolo_weights_path}")
+
+        # 2. Extract channel sizes dynamically from the pre-built Detect head
+        # This ensures it always matches your backbone scale (n, s, m, l, x)
+        c3 = self.backbone.detect.cv2[0][0].conv.in_channels
+        c4 = self.backbone.detect.cv2[1][0].conv.in_channels
+        c5 = self.backbone.detect.cv2[2][0].conv.in_channels
+
+        # 3. Classification Head (Global image context)
+        self.cls_head = nn.Sequential(
+            # 1. Process the spatial layout while it still exists
+            Conv(c5, 256, k=3, s=1),
+            Conv(256, 256, k=3, s=2), # Stride 2 to downsample spatially
+            Conv(256, 256, k=3, s=1),
+            
+            # 2. Now that we've learned complex spatial patterns, squash it
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            
+            # 3. Deeper fully connected network with stronger dropout
+            nn.Dropout(0.3), # Increased dropout to prevent overfitting this large head
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128), # Batch norm helps deep linear networks
+            nn.SiLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, num_classes)
+        )
+
+        # 4. Segmentation Head (Pixel-level context)
+        # self.seg_conv = nn.Sequential(
+        #     Conv(c3 + c4 + c5, 256, 3), # Fuse the three neck scales
+        #     Conv(256, 128, 3),
+        #     nn.Conv2d(128, 1, kernel_size=1) # Output 1 channel for binary hand mask
+        # )
+        self.seg_conv = nn.Sequential(
+            Conv(c3 + c4 + c5, 256, 3), # Fuse the three neck scales
+            Conv(256, 256, k=3, s=2), # Stride 2 to downsample spatially
+            Conv(256, 256, k=3, s=1),
+            Attention(256, num_heads=4, attn_ratio=0.5), # Add attention for better spatial understanding
+            Conv(256, 256, k=3, s=1),
+            Conv(256, 256, k=3, s=1),
+            nn.Conv2d(256, 1, kernel_size=1) # Output 1 channel for binary hand mask
+        )
+
+        self.seg_conv = nn.ModuleList([
+            Conv(c3 + c4 + c5, 256, 3), # Fuse the three neck scales
+            Conv(256, 256, k=3, s=1),
+            Conv(256, 256, k=3, s=1),
+            # Attention(256, num_heads=4, attn_ratio=0.5), # Add attention for better spatial understanding
+            Conv(256, 256, k=3, s=1),
+            Conv(256, 256, k=3, s=1),
+            nn.Conv2d(256, 1, kernel_size=1) # Output 1 channel for binary hand mask
+        ])
+
+
+
+    def freeze_base_model(self):
+        """Freezes the backbone, neck, and detection head."""
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        print("Base YOLO26 frozen. Only cls_head and seg_head will be trained.")
+
+    def forward(self, x):
+        # --- 1. Run Backbone ---
+        b_x = self.backbone.b0(x)
+        b_x = self.backbone.b1(b_x)
+        b_x = self.backbone.b2(b_x)
+        p3 = self.backbone.b4(self.backbone.b3(b_x))
+        p4 = self.backbone.b6(self.backbone.b5(p3))
+        p5 = self.backbone.b10(self.backbone.b9(self.backbone.b8(self.backbone.b7(p4))))
+
+        # --- 2. Run Neck ---
+        n4 = self.backbone.h13(self.backbone.cat([self.backbone.up(p5), p4]))
+        n3 = self.backbone.h16(self.backbone.cat([self.backbone.up(n4), p3]))
+        n4_out = self.backbone.h19(self.backbone.cat([self.backbone.h17(n3), n4]))
+        n5_out = self.backbone.h22(self.backbone.cat([self.backbone.h20(n4_out), p5]))
+
+        neck_features = [n3, n4_out, n5_out]
+
+        # --- 3. Output Branches ---
+        
+        # A. Detection Output (Uses your heavily-trained, frozen detection head)
+        det_out = self.backbone.detect(neck_features)
+
+        # B. Classification Output (Attached to the deepest semantic layer)
+        cls_out = self.cls_head(n5_out)
+
+        # C. Segmentation Output (Fuses all three layers for spatial accuracy)
+        target_size = n3.shape[-2:]
+        n4_up = F.interpolate(n4_out, size=target_size, mode="nearest")
+        n5_up = F.interpolate(n5_out, size=target_size, mode="nearest")
+        
+        fused = self.backbone.cat([n3, n4_up, n5_up])
+        # mask_low_res = self.seg_conv(fused)
+
+        for layer in self.seg_conv:
+            if isinstance(layer, Conv) or isinstance(layer, nn.Conv2d):
+                fused = layer(fused)
+            if isinstance(layer, Attention):
+                fused = layer(fused) + fused
+        mask_low_res = fused
+            
+        
+        # Upsample mask to match the original image resolution
+        seg_out = F.interpolate(mask_low_res, size=x.shape[-2:], mode="bilinear", align_corners=False)
+
+        return {
+            "det": det_out,
+            "cls": cls_out,
+            "seg": seg_out
+        }
+
+
+
+
+
+
+
+
+
+
 # -----------------------------
 # Architecture summary helpers
 # -----------------------------
