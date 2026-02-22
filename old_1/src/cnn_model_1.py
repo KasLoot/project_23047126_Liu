@@ -275,7 +275,7 @@ def make_anchors(x, strides, offset=0.5):
         _, _, h, w = x[i].shape
         sx = torch.arange(end=w, device=device, dtype=dtype) + offset  # shift x
         sy = torch.arange(end=h, device=device, dtype=dtype) + offset  # shift y
-        sy, sx = torch.meshgrid(sy, sx)
+        sy, sx = torch.meshgrid(sy, sx, indexing="ij")
         anchor_tensor.append(torch.stack((sx, sy), -1).view(-1, 2))
         stride_tensor.append(torch.full((h * w, 1), stride, dtype=dtype, device=device))
     return torch.cat(anchor_tensor), torch.cat(stride_tensor)
@@ -364,46 +364,21 @@ class Head(torch.nn.Module):
 
 
 
-
-# class YOLO11_v2(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.darknet = DarkNet(width=[3, 16, 32, 64, 128, 256], depth=[1, 1, 1, 1, 1, 1], csp=[False, True])
-#         self.fpn = DarkFPN(width=[3, 16, 32, 64, 128, 256], depth=[1, 1, 1, 1, 1, 1], csp=[False, True])
-#         self.fc1 = torch.nn.Linear(64, 128)
-#         self.fc2 = torch.nn.Linear(128, 10)
-#         self.dropout = torch.nn.Dropout(0.5)
-    
-#     def forward(self, x):
-#         x = self.darknet(x)
-#         x = self.fpn(x)
-#         x = torch.nn.functional.adaptive_avg_pool2d(x, (1, 1))
-#         x = x.view(x.size(0), -1)
-#         x = self.fc1(x)
-#         x = torch.nn.functional.rms_norm(x, normalized_shape=x.shape[1:])
-#         x = torch.nn.functional.relu(x)
-#         x = self.dropout(x)
-#         x = self.fc2(x)
-#         # x = torch.nn.functional.softmax(x, dim=1)
-#         return x
-
-
-
 class YOLO11_v2(nn.Module):
     def __init__(self, num_classes=10, dropout=0.3):
         super().__init__()
         self.darknet = DarkNet(
-            width=[3, 32, 64, 128, 256, 512],
+            width=[3, 16, 32, 64, 128, 256],
             depth=[1, 1, 1, 1, 1, 1],
             csp=[False, True],
         )
         self.fpn = DarkFPN(
-            width=[3, 32, 64, 128, 256, 512],
+            width=[3, 16, 32, 64, 128, 256],
             depth=[1, 1, 1, 1, 1, 1],
             csp=[False, True],
         )
         # p3 has 64 channels, p4 has 128, p5 has 256 → total 448
-        self.fc1 = torch.nn.Linear((64 + 128 + 256)*2, 128)
+        self.fc1 = torch.nn.Linear((64 + 128 + 256)*1, 128)
         self.dropout = torch.nn.Dropout(dropout)
         self.fc2 = torch.nn.Linear(128, num_classes)
 
@@ -428,48 +403,192 @@ class YOLO11_v2(nn.Module):
 
 
 
-
-
-class YOLO(torch.nn.Module):
-    def __init__(self, width, depth, csp, num_classes):
+class YOLO11_Classification(nn.Module):
+    def __init__(self, num_classes=10, dropout=0.3):
         super().__init__()
-        self.net = DarkNet(width, depth, csp)
-        self.fpn = DarkFPN(width, depth, csp)
+        # p3 has 64 channels, p4 has 128, p5 has 256 → total 448
+        self.fc1 = torch.nn.Linear((64 + 128 + 256)*1, 128)
+        self.dropout = torch.nn.Dropout(dropout)
+        self.fc2 = torch.nn.Linear(128, num_classes)
 
-        img_dummy = torch.zeros(1, width[0], 256, 256)
-        self.head = Head(num_classes, (width[3], width[4], width[5]))
-        self.head.stride = torch.tensor([256 / x.shape[-2] for x in self.forward(img_dummy)])
+    def forward(self, x):
+        
+
+        x = self.fc1(x)
+        x = torch.nn.functional.rms_norm(x, normalized_shape=x.shape[1:])
+        x = torch.nn.functional.relu(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
+
+
+
+
+class YOLO11_Detection(nn.Module):
+    """YOLO11-style detection model.
+
+    - Training mode (`model.train()`): returns raw multi-scale head outputs (list of tensors),
+      suitable for a detection loss.
+    - Eval mode (`model.eval()`): returns center-based boxes + class prediction per box.
+
+    Bounding box format is (cx, cy, w, h) in input-image pixels.
+    """
+
+    def __init__(
+        self,
+        num_classes: int = 10,
+        img_size: int = 256,
+        width=None,
+        depth=None,
+        csp=None,
+    ):
+        super().__init__()
+
+        # Defaults match the backbone used by YOLO11_v2 above
+        if width is None:
+            width = [3, 16, 32, 64, 128, 256]
+        if depth is None:
+            depth = [1, 1, 1, 1, 1, 1]
+        if csp is None:
+            csp = [False, True]
+
+        self.num_classes = num_classes
+        self.img_size = img_size
+
+
+        self.head = Head(nc=num_classes, filters=(width[3], width[4], width[5]))
+
+        # p3, p4, p5 come from /8, /16, /32 scales for this backbone/FPN design.
+        self.head.stride = torch.tensor([8.0, 16.0, 32.0], dtype=torch.float32)
         self.stride = self.head.stride
         self.head.initialize_biases()
 
+    def _decode_raw_outputs(self, raw_outputs):
+        """
+        Decode raw training-mode outputs (list of [B, no, H, W]) into:
+        - boxes_cxcywh: [B, N, 4] in input-image pixels
+        - probs: [B, N, nc]
+        """
+        if not isinstance(raw_outputs, (list, tuple)) or len(raw_outputs) == 0:
+            raise ValueError("Expected non-empty list/tuple of raw detection outputs")
+
+        stride = self.head.stride.to(raw_outputs[0].device, dtype=raw_outputs[0].dtype)
+        anchors, strides = (t.transpose(0, 1) for t in make_anchors(raw_outputs, stride))
+
+        x = torch.cat([feat.view(feat.shape[0], self.head.no, -1) for feat in raw_outputs], dim=2)
+        box, cls = x.split(split_size=(4 * self.head.ch, self.head.nc), dim=1)
+
+        a, b = self.head.dfl(box).chunk(2, 1)
+        a = anchors.unsqueeze(0) - a
+        b = anchors.unsqueeze(0) + b
+        box = torch.cat(tensors=((a + b) / 2, b - a), dim=1)
+
+        pred = torch.cat(tensors=(box * strides, cls.sigmoid()), dim=1)
+        boxes_cxcywh = pred[:, :4, :].transpose(1, 2).contiguous()  # [B, N, 4]
+        probs = pred[:, 4:, :].transpose(1, 2).contiguous()  # [B, N, nc]
+        return boxes_cxcywh, probs
+
+    def forward(self, p3, p4, p5, return_scores: bool = True):
+        feats = [p3, p4, p5]
+        y = self.head(feats)
+
+        if isinstance(y, (list, tuple)):
+            boxes_cxcywh, probs = self._decode_raw_outputs(y)
+        else:
+            # Inference mode from Head: y is [B, 4 + nc, N]
+            boxes_cxcywh = y[:, :4, :].transpose(1, 2).contiguous()  # [B, N, 4]
+            probs = y[:, 4:, :].transpose(1, 2).contiguous()  # [B, N, nc]
+
+        scores, class_ids = probs.max(dim=2)  # [B, N]
+        if return_scores:
+            return boxes_cxcywh, probs, class_ids, scores
+        return boxes_cxcywh, probs, class_ids
+
+
+
+class YOLO11_ALL(nn.Module):
+    def __init__(self, num_classes=10, dropout=0.3):
+        super().__init__()
+        self.darknet = DarkNet(
+            width=[3, 16, 32, 64, 128, 256],
+            depth=[1, 1, 1, 1, 1, 1],
+            csp=[False, True],
+        )
+        self.fpn = DarkFPN(
+            width=[3, 16, 32, 64, 128, 256],
+            depth=[1, 1, 1, 1, 1, 1],
+            csp=[False, True],
+        )
+        self.classification_head = YOLO11_Classification(num_classes=num_classes, dropout=dropout)
+        self.detection_head = YOLO11_Detection(num_classes=num_classes, img_size=256, width=[3, 16, 32, 64, 128, 256], depth=[1, 1, 1, 1, 1, 1], csp=[False, True])
+
     def forward(self, x):
-        x = self.net(x)
-        x = self.fpn(x)
-        return self.head(list(x))
+        p3, p4, p5 = self.fpn(self.darknet(x))
 
-    def fuse(self):
-        for m in self.modules():
-            if type(m) is Conv and hasattr(m, 'norm'):
-                m.conv = fuse_conv(m.conv, m.norm)
-                m.forward = m.fuse_forward
-                delattr(m, 'norm')
-        return self
+        # Keep feature maps for detection
+        det_p3, det_p4, det_p5 = p3, p4, p5
+
+        # Global average pool each scale: [B, C, H, W] → [B, C]
+        p3 = torch.nn.functional.adaptive_avg_pool2d(p3, 1).flatten(1)
+        p4 = torch.nn.functional.adaptive_avg_pool2d(p4, 1).flatten(1)
+        p5 = torch.nn.functional.adaptive_avg_pool2d(p5, 1).flatten(1)
+
+        # Concatenate along channel dim: [B, 64+128+256] = [B, 448]
+        x = torch.cat([p3, p4, p5], dim=1)
+
+        class_logits = self.classification_head(x)
+        boxes_cxcywh, det_probs, class_ids, scores = self.detection_head(det_p3, det_p4, det_p5, return_scores=True)
+
+        return class_logits, boxes_cxcywh, det_probs, class_ids, scores
 
 
 
 
-class YOLOv11:
-  def __init__(self):
+
+
+
+
+
+# class YOLO(torch.nn.Module):
+#     def __init__(self, width, depth, csp, num_classes):
+#         super().__init__()
+#         self.net = DarkNet(width, depth, csp)
+#         self.fpn = DarkFPN(width, depth, csp)
+
+#         img_dummy = torch.zeros(1, width[0], 256, 256)
+#         self.head = Head(num_classes, (width[3], width[4], width[5]))
+#         self.head.stride = torch.tensor([256 / x.shape[-2] for x in self.forward(img_dummy)])
+#         self.stride = self.head.stride
+#         self.head.initialize_biases()
+
+#     def forward(self, x):
+#         x = self.net(x)
+#         x = self.fpn(x)
+#         return self.head(list(x))
+
+#     def fuse(self):
+#         for m in self.modules():
+#             if type(m) is Conv and hasattr(m, 'norm'):
+#                 m.conv = fuse_conv(m.conv, m.norm)
+#                 m.forward = m.fuse_forward
+#                 delattr(m, 'norm')
+#         return self
+
+
+
+
+# class YOLOv11:
+#   def __init__(self):
     
-    self.dynamic_weighting = {
-      'n':{'csp': [False, True], 'depth' : [1, 1, 1, 1, 1, 1], 'width' : [3, 16, 32, 64, 128, 256]},
-      's':{'csp': [False, True], 'depth' : [1, 1, 1, 1, 1, 1], 'width' : [3, 32, 64, 128, 256, 512]},
-      'm':{'csp': [True, True], 'depth' : [1, 1, 1, 1, 1, 1], 'width' : [3, 64, 128, 256, 512, 512]},
-      'l':{'csp': [True, True], 'depth' : [2, 2, 2, 2, 2, 2], 'width' : [3, 64, 128, 256, 512, 512]},
-      'x':{'csp': [True, True], 'depth' : [2, 2, 2, 2, 2, 2], 'width' : [3, 96, 192, 384, 768, 768]},
-    }
-  def build_model(self, version, num_classes):
-    csp = self.dynamic_weighting[version]['csp']
-    depth = self.dynamic_weighting[version]['depth']
-    width = self.dynamic_weighting[version]['width']
-    return YOLO(width, depth, csp, num_classes)
+#     self.dynamic_weighting = {
+#       'n':{'csp': [False, True], 'depth' : [1, 1, 1, 1, 1, 1], 'width' : [3, 16, 32, 64, 128, 256]},
+#       's':{'csp': [False, True], 'depth' : [1, 1, 1, 1, 1, 1], 'width' : [3, 32, 64, 128, 256, 512]},
+#       'm':{'csp': [True, True], 'depth' : [1, 1, 1, 1, 1, 1], 'width' : [3, 64, 128, 256, 512, 512]},
+#       'l':{'csp': [True, True], 'depth' : [2, 2, 2, 2, 2, 2], 'width' : [3, 64, 128, 256, 512, 512]},
+#       'x':{'csp': [True, True], 'depth' : [2, 2, 2, 2, 2, 2], 'width' : [3, 96, 192, 384, 768, 768]},
+#     }
+#   def build_model(self, version, num_classes):
+#     csp = self.dynamic_weighting[version]['csp']
+#     depth = self.dynamic_weighting[version]['depth']
+#     width = self.dynamic_weighting[version]['width']
+#     return YOLO(width, depth, csp, num_classes)

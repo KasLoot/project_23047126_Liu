@@ -3,6 +3,7 @@ import shutil
 import json
 
 import PIL.Image as Image
+import PIL.ImageDraw as ImageDraw
 import numpy as np
 import torch
 
@@ -209,9 +210,150 @@ def image_to_tensor_dataset():
     # print(f"Saved mask tensors to {os.path.join(all_in_one_tensor_path, 'mask_tensors.pt')}")
 
 
+def _visualize_bounding_boxes(annotation_json, sample_count=30):
+    """Save side-by-side image/mask previews with the computed bounding box drawn."""
+    dataset_root = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset"
+    images_path = os.path.join(dataset_root, "images")
+    masks_path = os.path.join(dataset_root, "masks")
+    vis_path = os.path.join(dataset_root, "bbox_visualizations")
+    os.makedirs(vis_path, exist_ok=True)
+
+    items_with_box = [item for item in annotation_json if "box" in item]
+    items_with_box = items_with_box[:sample_count]
+
+    saved_count = 0
+    skipped_count = 0
+
+    for item in tqdm(items_with_box, desc="Saving bbox visualizations"):
+        image_name = item.get("new_image_file")
+        mask_name = item.get("new_mask_file", image_name)
+        box = item.get("box", [0.0, 0.0, 0.0, 0.0])
+
+        if not image_name or not mask_name:
+            skipped_count += 1
+            continue
+
+        image_file_path = os.path.join(images_path, image_name)
+        mask_file_path = os.path.join(masks_path, mask_name)
+
+        if not os.path.exists(image_file_path) or not os.path.exists(mask_file_path):
+            skipped_count += 1
+            continue
+
+        image = Image.open(image_file_path).convert("RGB")
+        mask = Image.open(mask_file_path).convert("L").convert("RGB")
+
+        xc, yc, bw, bh = box
+        x_min = int(round(xc - bw / 2.0))
+        y_min = int(round(yc - bh / 2.0))
+        x_max = int(round(xc + bw / 2.0))
+        y_max = int(round(yc + bh / 2.0))
+
+        # Keep coordinates within valid image range
+        img_w, img_h = image.size
+        x_min = max(0, min(img_w - 1, x_min))
+        y_min = max(0, min(img_h - 1, y_min))
+        x_max = max(0, min(img_w - 1, x_max))
+        y_max = max(0, min(img_h - 1, y_max))
+
+        image_draw = ImageDraw.Draw(image)
+        mask_draw = ImageDraw.Draw(mask)
+        image_draw.rectangle([x_min, y_min, x_max, y_max], outline=(255, 0, 0), width=2)
+        mask_draw.rectangle([x_min, y_min, x_max, y_max], outline=(255, 0, 0), width=2)
+
+        # Side-by-side preview: left=image, right=mask
+        preview = Image.new("RGB", (img_w * 2, img_h))
+        preview.paste(image, (0, 0))
+        preview.paste(mask, (img_w, 0))
+
+        stem = os.path.splitext(image_name)[0]
+        preview.save(os.path.join(vis_path, f"{stem}_bbox_check.png"))
+        saved_count += 1
+
+    print(f"Saved {saved_count} visualization images to: {vis_path}")
+    print(f"Skipped {skipped_count} samples during visualization")
+
+
+def get_bouding_box_from_mask(visualize=True, visualization_samples=30):
+    masks_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/masks"
+
+    annotation_json_path = "/home/yuxin/Object_Detection/project_23047126_Liu/dataset/processed_full_dataset/annotations/all_annotations.json"
+    with open(annotation_json_path, "r") as f:
+        annotation_json = json.load(f)
+
+    # Build index lookup for fast matching: mask_index -> annotation object
+    annotation_by_index = {}
+    for image_object in annotation_json:
+        if "new_mask_file" in image_object:
+            key = os.path.splitext(image_object["new_mask_file"])[0]
+            annotation_by_index[key] = image_object
+        elif "new_image_file" in image_object:
+            key = os.path.splitext(image_object["new_image_file"])[0]
+            annotation_by_index[key] = image_object
+        else:
+            key = str(image_object.get("name_index", ""))
+            if key:
+                annotation_by_index[key] = image_object
+
+    mask_files = [
+        file_name for file_name in os.listdir(masks_path)
+        if file_name.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"))
+    ]
+
+    matched_count = 0
+    missing_annotation_count = 0
+    empty_mask_count = 0
+
+    for mask_file_name in tqdm(mask_files, desc="Extracting bounding boxes from masks"):
+        # 1) mask_index from file name (without extension)
+        mask_index = os.path.splitext(mask_file_name)[0]
+        mask_file_path = os.path.join(masks_path, mask_file_name)
+
+        if mask_index not in annotation_by_index:
+            missing_annotation_count += 1
+            continue
+
+        mask = Image.open(mask_file_path).convert("L")
+        mask_array = np.array(mask)
+
+        # Foreground pixels are non-zero
+        ys, xs = np.where(mask_array > 0)
+
+        if len(xs) == 0 or len(ys) == 0:
+            # Keep a valid placeholder when mask is empty
+            xc, yc, bw, bh = 0.0, 0.0, 0.0, 0.0
+            empty_mask_count += 1
+        else:
+            x_min, x_max = xs.min(), xs.max()
+            y_min, y_max = ys.min(), ys.max()
+
+            # 2) centre and width/height in pixel units
+            bw = float(x_max - x_min + 1)
+            bh = float(y_max - y_min + 1)
+            xc = float((x_min + x_max) / 2.0)
+            yc = float((y_min + y_max) / 2.0)
+
+        # 3) write to matching annotation object
+        annotation_by_index[mask_index]["box"] = [xc, yc, bw, bh]
+        matched_count += 1
+
+    with open(annotation_json_path, "w") as f:
+        json.dump(annotation_json, f, indent=4)
+
+    print(f"Updated box for {matched_count} masks.")
+    print(f"Masks without matching annotation: {missing_annotation_count}")
+    print(f"Empty masks: {empty_mask_count}")
+
+    if visualize:
+        _visualize_bounding_boxes(annotation_json, sample_count=visualization_samples)
+
+
+
+
 
 
 
 if __name__ == "__main__":
     # combine_dataset()
-    image_to_tensor_dataset()
+    # image_to_tensor_dataset()
+    get_bouding_box_from_mask()
