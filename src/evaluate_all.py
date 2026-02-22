@@ -12,9 +12,11 @@ import torchvision
 # IMPORTANT: Import the MultiTask model
 from model_1 import YOLO26MultiTask
 
-random.seed(42)
-np.random.seed(42)
-torch.manual_seed(42)
+global_seed = 10
+
+random.seed(global_seed)
+np.random.seed(global_seed)
+torch.manual_seed(global_seed)
 
 GESTURE_CLASSES = {
     0: "call",
@@ -236,7 +238,7 @@ def run_folder_inference(
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--folder", type=str, required=True, help="Path to folder containing primary inference images")
+    parser.add_argument("--folder", type=str, help="Path to folder containing primary inference images", default="dataset/processed_full_dataset/images")
     parser.add_argument(
         "--test_folder",
         type=str,
