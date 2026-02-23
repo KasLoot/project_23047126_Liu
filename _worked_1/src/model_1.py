@@ -327,6 +327,7 @@ class YOLO26(nn.Module):
         c3 = scale_channels(256, w, max_ch)
         c4 = scale_channels(512, w, max_ch)
         c5 = scale_channels(1024, w, max_ch)
+        print(f"Scaled channels (c1-c5): {c1}, {c2}, {c3}, {c4}, {c5}")
 
         n2 = scale_depth(2, d)
 
@@ -546,10 +547,18 @@ def summarize_yolo26_design() -> str:
 def _demo() -> None:
     print(summarize_yolo26_design())
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
     model = YOLO26(nc=80, scale="n", end2end=True, reg_max=1)
+    model.to(device)
     model.eval()
 
-    x = torch.randn(1, 3, 640, 640)
+    import torchinfo
+    torchinfo.summary(model, input_size=(1, 3, 640, 480), device=str(device), depth=5)
+
+
+    x = torch.randn(1, 3, 640, 480, device=device)
     with torch.no_grad():
         y, aux = model(x)
 
