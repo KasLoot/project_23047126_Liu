@@ -1,84 +1,135 @@
+"""
+Standalone YOLO26 implementation (from-scratch style) for architecture inspection.
+
+This file intentionally re-implements the key YOLO26 detect architecture components
+without importing Ultralytics internal modules, so the design is easier to inspect
+and modify.
+
+Covered features:
+- Compound scaling (n/s/m/l/x)
+- Backbone: Conv -> C3k2 blocks -> SPPF -> C2PSA
+- PAN/FPN neck with P3/P4/P5 outputs
+- Dual-head detection design (one-to-many + one-to-one branches)
+- End-to-end path helper (top-k selection, NMS-free style output format)
+
+Notes:
+- This is an educational/reference implementation, not weight-compatible with
+  official Ultralytics checkpoints.
+- It mimics the YOLO26 detect YAML topology and high-level head behavior.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import math
 
-def autopad(k: int, p: int | None = None):
+# -----------------------------
+# Utilities
+# -----------------------------
+
+
+def autopad(k: int, p: int | None = None) -> int:
     return k // 2 if p is None else p
 
-class Conv(nn.Module):
-    """Standard convolution with BatchNorm and SiLU activation."""
-    def __init__(self, ci, co, k=1, s=1, p=None, act=True, g=1, bias=False):
-        super().__init__()
-        self.conv = nn.Conv2d(ci, co, k, s, autopad(k, p), groups=g, bias=bias)
-        self.bn = nn.BatchNorm2d(co)
-        self.act = nn.SiLU() if act else nn.Identity()
 
-    def forward(self, x):
+class Conv(nn.Module):
+    """Conv-BN-Activation block."""
+
+    default_act = nn.SiLU
+
+    def __init__(self, c1: int, c2: int, k: int = 1, s: int = 1, p: int | None = None, g: int = 1, act=True):
+        super().__init__()
+        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p), groups=g, bias=False)
+        self.bn = nn.BatchNorm2d(c2)
+        self.act = self.default_act() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.act(self.bn(self.conv(x)))
 
 
 class Bottleneck(nn.Module):
-    def __init__(self, ci, co, residual=True):
+    """Standard residual bottleneck."""
+
+    def __init__(self, c1: int, c2: int, shortcut: bool = True, e: float = 0.5):
         super().__init__()
-        self.conv1 = Conv(ci, co, 3, 1)
-        self.conv2 = Conv(co, co, 3, 1)
-        self.residual = residual
+        c_ = int(c2 * e)
+        self.cv1 = Conv(c1, c_, 3, 1)
+        self.cv2 = Conv(c_, c2, 3, 1)
+        self.add = shortcut and c1 == c2
 
-    def forward(self, x):
-        y = self.conv2(self.conv1(x))
-        return x + y if self.residual else y
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.cv2(self.cv1(x))
+        return x + y if self.add else y
 
 
-class CSP(nn.Module):
+class C2f(nn.Module):
+    """C2f-style CSP block."""
+
+    def __init__(self, c1: int, c2: int, n: int = 1, shortcut: bool = False, e: float = 0.5):
+        super().__init__()
+        self.c = int(c2 * e)
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + n) * self.c, c2, 1, 1)
+        self.m = nn.ModuleList(Bottleneck(self.c, self.c, shortcut=shortcut, e=1.0) for _ in range(n))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
+
+class C3k(nn.Module):
+    """C3k block (stacked bottlenecks with configurable kernel-like behavior)."""
+
+    def __init__(self, c: int, n: int = 2, shortcut: bool = True):
+        super().__init__()
+        self.m = nn.Sequential(*(Bottleneck(c, c, shortcut=shortcut, e=1.0) for _ in range(n)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.m(x)
+
+
+class C3k2(C2f):
+    """YOLO26 C3k2 block.
+
+    For simplicity, this implementation uses the C2f scaffold with each repeated block
+    being either Bottleneck or C3k.
     """
-    Cross Stage Partial (CSP) block.
 
-    Idea:
-      1) Split features into two paths.
-      2) Process only one path through bottlenecks.
-      3) Concatenate processed + shortcut path.
-      4) Fuse with a final 1x1 convolution.
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        n: int = 1,
+        c3k: bool = False,
+        e: float = 0.5,
+        shortcut: bool = True,
+    ):
+        super().__init__(c1, c2, n=n, shortcut=shortcut, e=e)
+        self.m = nn.ModuleList((C3k(self.c, n=2, shortcut=shortcut) if c3k else Bottleneck(self.c, self.c, shortcut=shortcut, e=1.0)) for _ in range(n))
 
-    This reduces compute/memory while preserving gradient flow.
-    """
-    def __init__(self, ci, co, n=1, e=0.5, residual=True):
+
+class SPPF(nn.Module):
+    """Fast SPP block."""
+
+    def __init__(self, c1: int, c2: int, k: int = 5, n: int = 3):
         super().__init__()
-        hidden = int(co * e)
+        c_ = c1 // 2
+        self.cv1 = Conv(c1, c_, 1, 1, act=False)
+        self.cv2 = Conv(c_ * (n + 1), c2, 1, 1)
+        self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
+        self.n = n
 
-        # Split
-        self.cv1 = Conv(ci, hidden, k=1, s=1)  # processed branch
-        self.cv2 = Conv(ci, hidden, k=1, s=1)  # shortcut branch
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = [self.cv1(x)]
+        y.extend(self.m(y[-1]) for _ in range(self.n))
+        return self.cv2(torch.cat(y, 1))
 
-        # Transform processed branch
-        self.m = nn.Sequential(*[Bottleneck(hidden, hidden, residual=residual) for _ in range(n)])
-
-        # Fuse
-        self.cv3 = Conv(2 * hidden, co, k=1, s=1)
-
-    def forward(self, x):
-        y1 = self.m(self.cv1(x))
-        y2 = self.cv2(x)
-        return self.cv3(torch.cat((y1, y2), dim=1))
-
-
-class SPP(nn.Module):
-    """Spatial Pyramid Pooling block using parallel max-pooling kernels."""
-    def __init__(self, ci, co, k=(5, 9, 13)):
-        super().__init__()
-        hidden = max(1, ci // 2)
-        self.cv1 = Conv(ci, hidden, k=1, s=1)
-        self.m = nn.ModuleList([
-            nn.MaxPool2d(kernel_size=ks, stride=1, padding=ks // 2)
-            for ks in k
-        ])
-        self.cv2 = Conv(hidden * (len(k) + 1), co, k=1, s=1)
-
-    def forward(self, x):
-        x = self.cv1(x)
-        return self.cv2(torch.cat([x] + [pool(x) for pool in self.m], dim=1))
-    
 
 class Attention(nn.Module):
     """Lightweight spatial attention used by PSA blocks."""
@@ -106,9 +157,9 @@ class Attention(nn.Module):
         attn = attn.softmax(dim=-1)
         y = (v @ attn.transpose(-2, -1)).view(b, c, h, w) + self.pe(v.reshape(b, c, h, w))
         return self.proj(y)
-    
 
-class PSA(nn.Module):
+
+class PSABlock(nn.Module):
     def __init__(self, c: int):
         super().__init__()
         heads = max(c // 64, 1)
@@ -129,56 +180,29 @@ class C2PSA(nn.Module):
         self.c = int(c1 * e)
         self.cv1 = Conv(c1, 2 * self.c, 1, 1)
         self.cv2 = Conv(2 * self.c, c1, 1, 1)
-        self.m = nn.Sequential(*(PSA(self.c) for _ in range(n)))
+        self.m = nn.Sequential(*(PSABlock(self.c) for _ in range(n)))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         a, b = self.cv1(x).split((self.c, self.c), dim=1)
         b = self.m(b)
         return self.cv2(torch.cat((a, b), dim=1))
-    
 
 
-class ClassifierHead(nn.Module):
-    def __init__(self, ci, num_classes):
+class Concat(nn.Module):
+    def __init__(self, dim: int = 1):
         super().__init__()
-        self.conv1 = Conv(ci, ci, k=3, s=1)
-        self.conv2 = Conv(ci, ci, k=2)
-        self.conv3 = Conv(ci, ci, k=1)
+        self.dim = dim
 
-        self.pool = nn.AdaptiveAvgPool2d(1)
-        self.ffw1 = nn.Linear(ci, ci)
-        self.ffw2 = nn.Linear(ci, ci)
-        self.out = nn.Linear(ci, num_classes)
-
-    def forward(self, x):
-        x = self.conv3(self.conv2(self.conv1(x)))
-        x = self.pool(x).flatten(1)
-        x = F.dropout(F.silu(F.rms_norm(self.ffw1(x))), p=0.3, training=self.training)
-        x = F.dropout(F.rms_norm(self.ffw2(x)), p=0.3, training=self.training)
-        return self.out(x)
-    
-
-class SegmentationHead(nn.Module):
-    def __init__(self, ci, num_classes):
-        super().__init__()
-        self.conv1 = Conv(ci, ci, k=3, s=1)
-        self.conv2 = Conv(ci, ci, k=2)
-        self.conv3 = Conv(ci, ci, k=1)
-
-        self.pool = nn.AdaptiveAvgPool2d(1)
-        self.ffw1 = nn.Linear(ci, ci)
-        self.ffw2 = nn.Linear(ci, ci)
-        self.out = nn.Linear(ci, num_classes)
-
-    def forward(self, x):
-        x = self.conv3(self.conv2(self.conv1(x)))
-        x = self.pool(x).flatten(1)
-        x = F.dropout(F.silu(F.rms_norm(self.ffw1(x))), p=0.3, training=self.training)
-        x = F.dropout(F.rms_norm(self.ffw2(x)), p=0.3, training=self.training)
-        return self.out(x)
+    def forward(self, xs: list[torch.Tensor]) -> torch.Tensor:
+        return torch.cat(xs, dim=self.dim)
 
 
-class DetectionHead(nn.Module):
+# -----------------------------
+# Detection head (simplified)
+# -----------------------------
+
+
+class Detect(nn.Module):
     """YOLO26-style dual-branch head.
 
     - one-to-many: conventional dense supervision branch
@@ -251,61 +275,306 @@ class DetectionHead(nn.Module):
             return y, {"one2many": one2many, "one2one": one2one}
 
         return one2many
-    
-class Concat(nn.Module):
-    def __init__(self, dim: int = 1):
-        super().__init__()
-        self.dim = dim
 
-    def forward(self, xs: list[torch.Tensor]) -> torch.Tensor:
-        return torch.cat(xs, dim=self.dim)
 
-class Core(nn.Module):
-    def __init__(self, ch=(16, 32, 64, 128, 256)):
+# -----------------------------
+# YOLO26 model definition
+# -----------------------------
+
+
+@dataclass
+class ScaleCfg:
+    depth: float
+    width: float
+    max_channels: int
+
+
+SCALES: dict[str, ScaleCfg] = {
+    "n": ScaleCfg(0.50, 0.25, 1024),
+    "s": ScaleCfg(0.50, 0.50, 1024),
+    "m": ScaleCfg(0.50, 1.00, 512),
+    "l": ScaleCfg(1.00, 1.00, 512),
+    "x": ScaleCfg(1.00, 1.50, 512),
+}
+
+
+def make_divisible(v: float, divisor: int = 8) -> int:
+    return int((v + divisor / 2) // divisor * divisor)
+
+
+def scale_channels(c: int, w: float, max_ch: int) -> int:
+    return make_divisible(min(c, max_ch) * w, 8)
+
+
+def scale_depth(n: int, d: float) -> int:
+    return max(round(n * d), 1) if n > 1 else n
+
+
+class BackBone(nn.Module):
+    """YOLO26 detect model (from scratch / inspectable implementation)."""
+
+    def __init__(self, nc: int = 80, scale: Literal["n", "s", "m", "l", "x"] = "n", end2end: bool = True, reg_max: int = 1):
         super().__init__()
+        if scale not in SCALES:
+            raise ValueError(f"Unsupported scale '{scale}'. Choose from {list(SCALES)}")
+
+        cfg = SCALES[scale]
+        d, w, max_ch = cfg.depth, cfg.width, cfg.max_channels
+
+        # --- Backbone channels ---
+        c1 = scale_channels(64, w, max_ch)
+        c2 = scale_channels(128, w, max_ch)
+        c3 = scale_channels(256, w, max_ch)
+        c4 = scale_channels(512, w, max_ch)
+        c5 = scale_channels(1024, w, max_ch)
+        print(f"Scaled channels (c1-c5): {c1}, {c2}, {c3}, {c4}, {c5}")
+
+        n2 = scale_depth(2, d)
 
         # Backbone
-        self.b0 = Conv(3, ch[0], 3, 2)
-        self.b1 = Conv(ch[0], ch[1], 3, 2)
-        self.b2 = CSP(ch[1], ch[2], n=3)
-        self.b3 = CSP(ch[2], ch[3], n=9)
-        self.b4 = SPP(ch[3], ch[4])
-        self.b5 = C2PSA(ch[4], ch[4])
+        self.b0 = Conv(3, c1, 3, 2)  # P1/2
+        self.b1 = Conv(c1, c2, 3, 2)  # P2/4
+        self.b2 = C3k2(c2, c3, n=n2, c3k=False, e=0.25, shortcut=False)
 
-        # Neck
+        self.b3 = Conv(c3, c3, 3, 2)  # P3/8
+        self.b4 = C3k2(c3, c4, n=n2, c3k=False, e=0.25, shortcut=False)
+
+        self.b5 = Conv(c4, c4, 3, 2)  # P4/16
+        self.b6 = C3k2(c4, c4, n=n2, c3k=True, e=0.5, shortcut=True)
+
+        self.b7 = Conv(c4, c5, 3, 2)  # P5/32
+        self.b8 = C3k2(c5, c5, n=n2, c3k=True, e=0.5, shortcut=True)
+
+        self.b9 = SPPF(c5, c5, k=5, n=3)
+        self.b10 = C2PSA(c5, c5, n=n2)
+
+        # Neck / head feature aggregation
         self.up = nn.Upsample(scale_factor=2, mode="nearest")
         self.cat = Concat(1)
 
-        self.n1_1 = Conv(ch[1]+ch[2], ch[2], 3, 1)
-        self.n1_2 = CSP(ch[2], ch[2], n=3, e=0.5)
+        self.h13 = C3k2(c5 + c4, c4, n=n2, c3k=True, e=0.5, shortcut=True)
+        self.h16 = C3k2(c4 + c4, c3, n=n2, c3k=True, e=0.5, shortcut=True)
 
-        self.n2_1 = Conv(ch[2]+ch[3], ch[3], 3, 1)
-        self.n2_2 = CSP(ch[3], ch[3], n=3, e=0.5)
+        self.h17 = Conv(c3, c3, 3, 2)
+        self.h19 = C3k2(c3 + c4, c4, n=n2, c3k=True, e=0.5, shortcut=True)
 
-        self.n3_1 = Conv(ch[3]+ch[4], ch[4], 3, 1)
-        self.n3_2 = CSP(ch[4], ch[4], n=3, e=0.5)
+        self.h20 = Conv(c4, c4, 3, 2)
+        self.h22 = C3k2(c4 + c5, c5, n=1, c3k=True, e=0.5, shortcut=True)
 
-    def forward(self, x):
+
+        self.nc = nc
+        self.scale = scale
+        self.end2end = end2end
+        self.reg_max = reg_max
+
+    def forward(self, x: torch.Tensor):
         # Backbone
-        x0 = self.b1(self.b0(x)) #128
-        x1 = self.b2(x0) #256
-        x2 = self.b3(x1) #512
-        x3 = self.b5(self.b4(x2)) #1024
+        x = self.b0(x)
+        x = self.b1(x)
+        x = self.b2(x)
 
-        print(x0.shape, x1.shape, x2.shape, x3.shape)
+        p3 = self.b3(x)
+        p3 = self.b4(p3)
+
+        p4 = self.b5(p3)
+        p4 = self.b6(p4)
+
+        p5 = self.b7(p4)
+        p5 = self.b8(p5)
+        p5 = self.b9(p5)
+        p5 = self.b10(p5)
+
+        # PAN/FPN neck
+        n4 = self.h13(self.cat([self.up(p5), p4]))
+        n3 = self.h16(self.cat([self.up(n4), p3]))  # small
+
+        n4_out = self.h19(self.cat([self.h17(n3), n4]))  # medium
+        n5_out = self.h22(self.cat([self.h20(n4_out), p5]))  # large
+
+        return [n3, n4_out, n5_out]
 
 
+
+class YOLO26MultiTask(nn.Module):
+    def __init__(self, num_classes=10, end2end=True):
+        super().__init__()
+        
+        # 1. Load the base YOLO26 model (Scale "n" based on your config)
+        self.backbone = BackBone(nc=num_classes, scale="n", end2end=end2end)
         
 
+        # 2. Extract channel sizes from the actual neck block outputs.
+        # NOTE: use C3k2.cv2 output channels (final block output), not inner bottleneck channels.
+        c3 = self.backbone.h16.cv2.conv.out_channels  # Output channels of neck P3
+        c4 = self.backbone.h19.cv2.conv.out_channels  # Output channels of neck P4
+        c5 = self.backbone.h22.cv2.conv.out_channels  # Output channels of neck P5
 
+        self.detect = Detect(nc=num_classes, ch=(c3, c4, c5), reg_max=1, end2end=end2end)
+        
+
+        # 3. Classification Head (Global image context)
+        self.cls_head = nn.Sequential(
+            # 1. Process the spatial layout while it still exists
+            Conv(c5, 256, k=3, s=1),
+            Conv(256, 256, k=3, s=2), # Stride 2 to downsample spatially
+            Conv(256, 256, k=3, s=1),
+            
+            # 2. Now that we've learned complex spatial patterns, squash it
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            
+            # 3. Deeper fully connected network with stronger dropout
+            nn.Dropout(0.3), # Increased dropout to prevent overfitting this large head
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128), # Batch norm helps deep linear networks
+            nn.SiLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, num_classes)
+        )
+
+        # 4. Segmentation Head (Pixel-level context)
+        # self.seg_conv = nn.Sequential(
+        #     Conv(c3 + c4 + c5, 256, 3), # Fuse the three neck scales
+        #     Conv(256, 128, 3),
+        #     nn.Conv2d(128, 1, kernel_size=1) # Output 1 channel for binary hand mask
+        # )
+        self.seg_conv = nn.Sequential(
+            Conv(c3 + c4 + c5, 256, 3), # Fuse the three neck scales
+            Conv(256, 256, k=3, s=2), # Stride 2 to downsample spatially
+            Conv(256, 256, k=3, s=1),
+            Attention(256, num_heads=4, attn_ratio=0.5), # Add attention for better spatial understanding
+            Conv(256, 256, k=3, s=1),
+            Conv(256, 256, k=3, s=1),
+            nn.Conv2d(256, 1, kernel_size=1) # Output 1 channel for binary hand mask
+        )
+
+        # self.seg_conv = nn.ModuleList([
+        #     Conv(c3 + c4 + c5, 256, 3), # Fuse the three neck scales
+        #     Conv(256, 256, k=3, s=1),
+        #     Conv(256, 256, k=3, s=1),
+        #     # Attention(256, num_heads=4, attn_ratio=0.5), # Add attention for better spatial understanding
+        #     Conv(256, 256, k=3, s=1),
+        #     Conv(256, 256, k=3, s=1),
+        #     nn.Conv2d(256, 1, kernel_size=1) # Output 1 channel for binary hand mask
+        # ])
+
+
+
+    def freeze_base_model(self):
+        """Freezes the backbone, neck, and detection head."""
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        print("Base YOLO26 frozen. Only cls_head and seg_head will be trained.")
+
+    def forward(self, x):
+        # --- 1. Run Backbone ---
+        b_x = self.backbone.b0(x)
+        b_x = self.backbone.b1(b_x)
+        b_x = self.backbone.b2(b_x)
+        p3 = self.backbone.b4(self.backbone.b3(b_x))
+        p4 = self.backbone.b6(self.backbone.b5(p3))
+        p5 = self.backbone.b10(self.backbone.b9(self.backbone.b8(self.backbone.b7(p4))))
+
+        # --- 2. Run Neck ---
+        n4 = self.backbone.h13(self.backbone.cat([self.backbone.up(p5), p4]))
+        n3 = self.backbone.h16(self.backbone.cat([self.backbone.up(n4), p3]))
+        n4_out = self.backbone.h19(self.backbone.cat([self.backbone.h17(n3), n4]))
+        n5_out = self.backbone.h22(self.backbone.cat([self.backbone.h20(n4_out), p5]))
+
+        neck_features = [n3, n4_out, n5_out]
+
+        # --- 3. Output Branches ---
+        
+        # A. Detection Output (Uses your heavily-trained, frozen detection head)
+        det_out = self.detect(neck_features)  # This will return one2many or one2one outputs based on training/inference mode and config
+
+        # B. Classification Output (Attached to the deepest semantic layer)
+        cls_out = self.cls_head(n5_out)
+
+        # C. Segmentation Output (Fuses all three layers for spatial accuracy)
+        target_size = n3.shape[-2:]
+        n4_up = F.interpolate(n4_out, size=target_size, mode="nearest")
+        n5_up = F.interpolate(n5_out, size=target_size, mode="nearest")
+        
+        fused = self.backbone.cat([n3, n4_up, n5_up])
+        # mask_low_res = self.seg_conv(fused)
+
+        for layer in self.seg_conv:
+            if isinstance(layer, Conv) or isinstance(layer, nn.Conv2d):
+                fused = layer(fused)
+            if isinstance(layer, Attention):
+                fused = layer(fused) + fused
+        mask_low_res = fused
+            
+        
+        # Upsample mask to match the original image resolution
+        seg_out = F.interpolate(mask_low_res, size=x.shape[-2:], mode="bilinear", align_corners=False)
+
+        return {
+            "det": det_out,
+            "cls": cls_out,
+            "seg": seg_out
+        }
+
+
+
+
+
+
+
+
+
+
+# -----------------------------
+# Architecture summary helpers
+# -----------------------------
+
+
+def summarize_yolo26_design() -> str:
+    return (
+        "YOLO26 design summary:\n"
+        "- Detect architecture uses P3/P4/P5 pyramid outputs (strides 8/16/32).\n"
+        "- Backbone uses Conv + C3k2 stages, then SPPF and C2PSA attention refinement.\n"
+        "- Neck uses PAN/FPN-style upsample-concat and downsample-concat fusion.\n"
+        "- Head supports dual-branch predictions: one2many (training-rich) + one2one (E2E/NMS-free path).\n"
+        "- Default YOLO26 detect config sets end2end=True and reg_max=1 (DFL removed-style regression).\n"
+        "- Compound scales n/s/m/l/x adjust depth, width, and max channels."
+    )
+
+
+def _demo() -> None:
+    print(summarize_yolo26_design())
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    model = YOLO26MultiTask(num_classes=10, end2end=True)
+    model.to(device)
+    model.eval()
+
+    import torchinfo
+    torchinfo.summary(model, input_size=(1, 3, 640, 480), device=str(device), depth=5)
+
+
+    x = torch.randn(1, 3, 640, 480, device=device)
+    with torch.no_grad():
+        out = model(x)
+
+    det_out = out["det"]
+    print("\nClassification logits:", tuple(out["cls"].shape))
+    print("Segmentation logits:", tuple(out["seg"].shape))
+
+    if isinstance(det_out, tuple):
+        y, aux = det_out
+        print("Detection output (end2end one2one postprocess):", tuple(y.shape))
+        print("one2many boxes:", tuple(aux["one2many"]["boxes"].shape))
+        print("one2many scores:", tuple(aux["one2many"]["scores"].shape))
+        print("one2one boxes:", tuple(aux["one2one"]["boxes"].shape))
+        print("one2one scores:", tuple(aux["one2one"]["scores"].shape))
+    else:
+        print("Detection boxes:", tuple(det_out["boxes"].shape))
+        print("Detection scores:", tuple(det_out["scores"].shape))
 
 
 if __name__ == "__main__":
-    import torchinfo
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = Core().to(torch.float16).to(device)
-    torchinfo.summary(model, input_size=(1, 3, 640, 480), dtypes=[torch.float16], device=device, depth=5)
-    model.eval()
-
-    x = torch.randn(1, 3, 640, 480).to(torch.float16).to(device)
-    y = model(x)
+    _demo()

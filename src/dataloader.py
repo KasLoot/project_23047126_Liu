@@ -128,3 +128,24 @@ class HandGestureDataset(Dataset):
         if self.transform:
             image_tensor, mask_tensor, bbox = self.transform(image_tensor, mask_tensor, bbox)
         return image_tensor, mask_tensor, class_id, bbox
+    
+
+# class HandGestureDataset_Test(Dataset):
+#     def __init__(self, image_tensor_dir, mask_tensor_dir, image_info_json):
+#         self.image_tensor_dir = image_tensor_dir
+#         self.mask_tensor_dir = mask_tensor_dir
+#         with open(image_info_json, "r") as f:
+#             self.image_info = json.load(f)
+
+#     def __len__(self):
+#         return len(self.image_info)
+
+#     def __getitem__(self, idx):
+#         image_info = self.image_info[idx]
+#         image_tensor_path = os.path.join(self.image_tensor_dir, image_info["new_image_name"].replace(".png", ".pt"))
+#         mask_tensor_path = os.path.join(self.mask_tensor_dir, image_info["new_mask_name"].replace(".png", ".pt"))
+#         image_tensor = torch.load(image_tensor_path)
+#         mask_tensor = torch.load(mask_tensor_path)
+#         class_id = image_info["class_id"]
+#         bbox = image_info["bbox"]
+#         return image_tensor, mask_tensor, class_id, bbox
