@@ -8,5 +8,48 @@ This dataset contains wrong gesture data, removed from training data.
 18006111_Shihab: original images missing (the corresponding original image of the annotation image is the same as the annotation image)
 
 
-Directory /home/yuxin/Object_Detection/project_23047126_Liu/dataset/filtered_dataset/rgb_only/25067520_Man/G07_peace/clip05/annotation does not exist.
+25067520_Man/G07_peace/clip05/annotation does not exist.
 Folder name wrong. Now changed from "clip07" to "clip05".
+
+
+"Guan", "Guan 2", and "Liang" duplicated, and they seem not to be the desired person. Deleted Guan 2 and Liang, and kept Guan.
+
+25120750_Chen/G03_like/clip02/rgb/fram_015.png, repective annotation is ram_015.png. Proceed to use for test set.
+
+
+
+
+Train set: 24 total
+22059968_Gerges
+23064347_Jiang
+25036894_Guo
+25036898_bojun
+25040826_Guo
+25042819_Kong
+25058518_Wang
+25055639_CHENG
+25050766_Zhen
+25047620_Islas
+25045993_He
+25067254_Yi
+25073993_Yu
+20077685_Weng
+23047126_Liu
+25077339_Houghton
+25081046_Zhang
+25115816_Jin
+COMP0248_Poveda
+COMP0248_Hasanova
+25207564_Lui
+25194692_XiNan
+25182471_Gurelli
+25150455_Guan
+
+
+
+Validation set: 5 total
+COMP0248_Manuel de Castro Ribeiro Jardim
+25120750_Chen
+18006111_Shihab
+25067520_Man
+25047621_Wu

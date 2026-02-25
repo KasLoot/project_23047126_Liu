@@ -1,11 +1,13 @@
-import json
 import torch
 import os
-from tqdm import tqdm
-import PIL.Image as Image
-import PIL.ImageDraw as ImageDraw
+import json
 import numpy as np
+from PIL import Image
+from torch.utils.data import Dataset, DataLoader, Subset
+from torchvision.transforms import functional as F
+from tqdm import tqdm
 import shutil
+
 
 def varify_dir_list(dir_list):
     for dir_path in dir_list:
@@ -13,6 +15,8 @@ def varify_dir_list(dir_list):
             print(f"Directory {dir_path} does not exist.")
             return False
     return True
+
+
 
 def mask_to_bbox(mask):
     # convert mask to [x_center, y_center, width, height]
@@ -28,7 +32,13 @@ def mask_to_bbox(mask):
     height = float(y_max - y_min)
     return [x_center, y_center, width, height]
 
-def gether_images_and_masks(dataset_path, output_image_dir, output_mask_dir):
+
+
+def gether_images_and_masks(dataset_path, output_dir):
+    output_image_dir = os.path.join(output_dir, "images")
+    output_mask_dir = os.path.join(output_dir, "masks")
+    os.makedirs(output_image_dir, exist_ok=True)
+    os.makedirs(output_mask_dir, exist_ok=True)
     image_name_index = 0
     all_image_info = []
 
@@ -89,41 +99,9 @@ def gether_images_and_masks(dataset_path, output_image_dir, output_mask_dir):
         json.dump(all_image_info, f, indent=4)
 
 
-def data_to_tensor(image_dataset_path, mask_dataset_path):
-    image_tensor_save_dir = image_dataset_path.replace("images", "image_tensors")
-    mask_tensor_save_dir = mask_dataset_path.replace("masks", "mask_tensors")
-    os.makedirs(image_tensor_save_dir, exist_ok=True)
-    os.makedirs(mask_tensor_save_dir, exist_ok=True)
-
-    for file in tqdm(os.listdir(image_dataset_path), desc="Converting images and masks to tensors"):
-        if file.endswith(".png"):
-            image_path = os.path.join(image_dataset_path, file)
-            mask_path = os.path.join(mask_dataset_path, file)
-            image = np.array(Image.open(image_path).convert("RGB"))
-            mask = np.array(Image.open(mask_path).convert("L"))
-            image_tensor = torch.from_numpy(image).float()
-            mask_tensor = torch.from_numpy(mask).float()
-            torch.save(image_tensor, os.path.join(image_tensor_save_dir, file.replace(".png", ".pt")))
-            torch.save(mask_tensor, os.path.join(mask_tensor_save_dir, file.replace(".png", ".pt")))
-        
-    
-
-
-
-
-
-
 if __name__ == "__main__":
-    dataset_path = "./dataset/filtered_dataset/rgb_only"
+    original_dataset_path = "dataset/rgb_only_filtered"
 
-    filtered_dataset_path = "./dataset/filtered_datasets"
+    filtered_dataset_path = "dataset/dataset_v1"
 
-    output_image_dir = "./dataset/processed_dataset_v2/rgb_only_given/images"
-    output_mask_dir = "./dataset/processed_dataset_v2/rgb_only_given/masks"
-
-    os.makedirs(output_image_dir, exist_ok=True)
-    os.makedirs(output_mask_dir, exist_ok=True)
-
-    gether_images_and_masks(dataset_path, output_image_dir=output_image_dir, output_mask_dir=output_mask_dir)
-
-    data_to_tensor(image_dataset_path=output_image_dir, mask_dataset_path=output_mask_dir)
+    gether_images_and_masks(original_dataset_path, filtered_dataset_path)

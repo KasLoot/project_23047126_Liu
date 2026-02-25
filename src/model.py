@@ -221,8 +221,13 @@ class Detect(nn.Module):
         self.end2end = end2end
         self.max_det = 300
 
+        print(f"ch: {ch}")
+
         c2 = max(16, ch[0] // 4, self.reg_max * 4)
         c3 = max(ch[0], min(self.nc, 100))
+
+        print(f"Head channels (c2, c3): {c2}, {c3}")
+        print(f"4 * reg_max: {4 * self.reg_max}")
 
         self.cv2 = nn.ModuleList(nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch)
         self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
@@ -236,7 +241,13 @@ class Detect(nn.Module):
     def _forward_branch(self, x: list[torch.Tensor], box_head: nn.ModuleList, cls_head: nn.ModuleList) -> dict[str, torch.Tensor]:
         bs = x[0].shape[0]
         boxes = torch.cat([box_head[i](x[i]).view(bs, 4 * self.reg_max, -1) for i in range(self.nl)], dim=-1)
+        
         scores = torch.cat([cls_head[i](x[i]).view(bs, self.nc, -1) for i in range(self.nl)], dim=-1)
+
+        print(f"x[0].shape: {x[0].shape}")
+        print(f"self.nl: {self.nl}")
+        print(f"Boxes shape: {boxes.shape}")
+        print(f"Scores shape: {scores.shape}")
         return {"boxes": boxes, "scores": scores, "feats": x}
 
     def _postprocess_one2one(self, boxes: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
