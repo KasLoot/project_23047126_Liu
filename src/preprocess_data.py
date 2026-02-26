@@ -102,6 +102,6 @@ def gether_images_and_masks(dataset_path, output_dir):
 if __name__ == "__main__":
     original_dataset_path = "dataset/rgb_only_filtered"
 
-    filtered_dataset_path = "dataset/dataset_v1"
+    train_dataset_path = "dataset/dataset_v1/train"
 
-    gether_images_and_masks(original_dataset_path, filtered_dataset_path)
+    gether_images_and_masks(original_dataset_path, train_dataset_path)
