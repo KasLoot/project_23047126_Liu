@@ -6,3 +6,5 @@ dataset/
 __pycache__/
 
 outputs/
+
+*/.DS_Store
