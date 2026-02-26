@@ -16,6 +16,8 @@ Folder name wrong. Now changed from "clip07" to "clip05".
 
 25120750_Chen/G03_like/clip02/rgb/fram_015.png, repective annotation is ram_015.png. Proceed to use for test set.
 
+COMP0248_Poveda: dislike and like gesture data are reversed. Fixed by hand and is in training dataset.
+
 
 
 

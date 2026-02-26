@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from model import YOLO26MultiTask
+from yolo26 import YOLO26MultiTask
 from torch.utils.data import DataLoader, Subset
 from dataloader import HandGestureDataset, SegAugment
 
@@ -36,32 +36,7 @@ def train_stage_1():
     model = get_model()
     model.to(train_stage_1_config.device)
 
-    # --- 2. Prepare Dataset and DataLoader ---
-    train_base_dataset = HandGestureDataset(
-        image_tensor_dir=train_stage_1_config.image_tensor_dir,
-        mask_tensor_dir=train_stage_1_config.mask_tensor_dir,
-        image_info_json=train_stage_1_config.image_info_json,
-        transform=SegAugment(),
-    )
-    val_base_dataset = HandGestureDataset(
-        image_tensor_dir=train_stage_1_config.image_tensor_dir,
-        mask_tensor_dir=train_stage_1_config.mask_tensor_dir,
-        image_info_json=train_stage_1_config.image_info_json,
-        transform=None,
-    )
-
-    num_samples = len(train_base_dataset)
-    train_size = int(train_stage_1_config.train_split * num_samples)
-    indices = torch.randperm(num_samples).tolist()
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:]
-
-    train_dataset = Subset(train_base_dataset, train_indices)
-    val_dataset = Subset(val_base_dataset, val_indices)
-
-    train_loader = DataLoader(train_dataset, batch_size=train_stage_1_config.batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=train_stage_1_config.batch_size, shuffle=False)
-
+    
 
     
 

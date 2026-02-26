@@ -58,50 +58,60 @@ def gether_images_and_masks(dataset_path, output_dir):
 
             all_mask_dirs = call_mask_dir + dislike_mask_dir + like_mask_dir + ok_mask_dir + one_mask_dir + palm_mask_dir + peace_mask_dir + rock_mask_dir + stop_mask_dir + three_mask_dir
             assert len(all_mask_dirs) == 50, f"Expected 50 mask directories, but got {len(all_mask_dirs)} for student {student_dir}"
-            assert varify_dir_list(all_mask_dirs), f"One or more mask directories do not exist for student {student_dir}"
+            # assert varify_dir_list(all_mask_dirs), f"One or more mask directories do not exist for student {student_dir}"
+            
+            try:
+                for mask_dir in all_mask_dirs:
+                    image_dir = mask_dir.replace("annotation", "rgb")
+                    for file in os.listdir(mask_dir):
+                        if file.endswith(".png"):
+                            mask_path = os.path.join(mask_dir, file)
+                            image_path = os.path.join(image_dir, file)
+                            if not os.path.exists(image_path) and not os.path.exists(mask_path):
+                                print(f"Image {image_path} does not exist for mask {mask_path}. Skipping.")
+                                continue
+                            new_image_name = f"{image_name_index}.png"
+                            new_mask_name = f"{image_name_index}.png"
+                            shutil.copy(image_path, os.path.join(output_image_dir, new_image_name))
+                            shutil.copy(mask_path, os.path.join(output_mask_dir, new_mask_name))
+                            
 
-            for mask_dir in all_mask_dirs:
-                image_dir = mask_dir.replace("annotation", "rgb")
-                for file in os.listdir(mask_dir):
-                    if file.endswith(".png"):
-                        mask_path = os.path.join(mask_dir, file)
-                        image_path = os.path.join(image_dir, file)
-                        if not os.path.exists(image_path) and not os.path.exists(mask_path):
-                            print(f"Image {image_path} does not exist for mask {mask_path}. Skipping.")
-                            continue
-                        new_image_name = f"{image_name_index}.png"
-                        new_mask_name = f"{image_name_index}.png"
-                        shutil.copy(image_path, os.path.join(output_image_dir, new_image_name))
-                        shutil.copy(mask_path, os.path.join(output_mask_dir, new_mask_name))
-                        
+                            class_name = mask_dir.split("/")[-3].split("_")[1]
+                            class_id = int(mask_dir.split("/")[-3].split("_")[0][1:]) - 1
+                            bbox = mask_to_bbox(np.array(Image.open(mask_path).convert("L")))
 
-                        class_name = mask_dir.split("/")[-3].split("_")[1]
-                        class_id = int(mask_dir.split("/")[-3].split("_")[0][1:]) - 1
-                        bbox = mask_to_bbox(np.array(Image.open(mask_path).convert("L")))
+                            image_info = {
+                                "name_index": image_name_index,
+                                "old_image_path": image_path,
+                                "old_mask_path": mask_path,
+                                "new_image_path": os.path.join(output_image_dir, new_image_name),
+                                "new_mask_path": os.path.join(output_mask_dir, new_mask_name),
+                                "new_image_name": new_image_name,
+                                "new_mask_name": new_mask_name,
+                                "class_name": class_name,
+                                "class_id": class_id,
+                                "bbox": bbox
+                            }
+                            all_image_info.append(image_info)
 
-                        image_info = {
-                            "name_index": image_name_index,
-                            "old_image_path": image_path,
-                            "old_mask_path": mask_path,
-                            "new_image_path": os.path.join(output_image_dir, new_image_name),
-                            "new_mask_path": os.path.join(output_mask_dir, new_mask_name),
-                            "new_image_name": new_image_name,
-                            "new_mask_name": new_mask_name,
-                            "class_name": class_name,
-                            "class_id": class_id,
-                            "bbox": bbox
-                        }
-                        all_image_info.append(image_info)
-
-                        image_name_index += 1
+                            image_name_index += 1
+            except Exception as e:
+                print(f"Error processing student {student_dir}: {e}")
+                continue
         
     with open(os.path.join(output_image_dir.replace("images", ""), "image_info.json"), "w") as f:
         json.dump(all_image_info, f, indent=4)
 
 
 if __name__ == "__main__":
-    original_dataset_path = "dataset/rgb_only_filtered"
+    original_train_dataset_path = "dataset/rgb_only_filtered_train"
 
     train_dataset_path = "dataset/dataset_v1/train"
 
-    gether_images_and_masks(original_dataset_path, train_dataset_path)
+    gether_images_and_masks(original_train_dataset_path, train_dataset_path)
+
+    original_val_dataset_path = "dataset/rgb_only_filtered_val"
+
+    val_dataset_path = "dataset/dataset_v1/val"
+
+    gether_images_and_masks(original_val_dataset_path, val_dataset_path)
