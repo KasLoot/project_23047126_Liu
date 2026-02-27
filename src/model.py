@@ -152,7 +152,15 @@ class CNNTransformer(nn.Module):
     def forward(self, x):
         x = self.conv1(x)
         for block in self.transformer_blocks:
-            x[:, self.d_model:, :, :] = block(x[:, self.d_model:, :, :])
+            # FIX: Split the tensor into the "skip" half and the "process" half
+            x_skip, x_process = torch.split(x, [self.d_model, self.d_model], dim=1)
+            
+            # Pass the second half through the block
+            x_process = block(x_process)
+            
+            # Re-concatenate them out-of-place
+            x = torch.cat([x_skip, x_process], dim=1)
+            
         x = self.norm(self.conv2(x))
         return x
 

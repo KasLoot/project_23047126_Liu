@@ -271,11 +271,11 @@ def plot_validation_samples(samples, output_dir):
     
     for i, (img, gt_box, gt_cls, preds) in enumerate(samples[:10]):
         ax = axes[i]
-        img_np = img.permute(1, 2, 0).cpu().numpy()
+        img_np = img.float().permute(1, 2, 0).cpu().numpy()
         img_np = np.clip(img_np, 0, 1)
         ax.imshow(img_np)
         
-        cx, cy, w, h = gt_box.cpu().numpy()
+        cx, cy, w, h = gt_box.float().cpu().numpy()
         
         # ADD THIS: Handle normalized boxes for visualization
         if w <= 1.0 and h <= 1.0:
@@ -290,7 +290,7 @@ def plot_validation_samples(samples, output_dir):
         # Plot Top Pred (Red)
         if len(preds) > 0:
             # Get the highest confidence prediction
-            best_pred = preds[preds[:, 4].argmax()].cpu().numpy()
+            best_pred = preds[preds[:, 4].argmax()].float().cpu().numpy()
             px1, py1, px2, py2, pconf, pcls = best_pred
             rect_pred = patches.Rectangle((px1, py1), px2-px1, py2-py1, linewidth=2, edgecolor='r', facecolor='none', linestyle='--', label=f"Pred: {int(pcls)} ({pconf:.2f})")
             ax.add_patch(rect_pred)
