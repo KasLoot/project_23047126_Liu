@@ -125,7 +125,7 @@ def train_stage_1():
     train_stage_1_config = Train_S1_Config()
     print(f"Using device: {train_stage_1_config.device}")
 
-    output_dir = "outputs/stage_1_training"
+    output_dir = "outputs/stage_1_training_2"
     os.makedirs(output_dir, exist_ok=True)
 
     # --- 1. Initialize Model ---

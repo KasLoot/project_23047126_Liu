@@ -9,14 +9,6 @@ from sklearn.metrics import confusion_matrix
 import math
 import torch.nn.functional as F
 
-# def xywh_to_xyxy(bbox):
-#     cx, cy, w, h = bbox
-#     x1 = cx - w / 2
-#     y1 = cy - h / 2
-#     x2 = cx + w / 2
-#     y2 = cy + h / 2
-#     return x1, y1, x2, y2
-
 
 def _xywh_to_xyxy(b: torch.Tensor) -> torch.Tensor:
     cx, cy, w, h = b.unbind(-1)
@@ -106,27 +98,24 @@ def compute_detection_loss(bbox_preds, bbox_cls, bboxes_xywh, class_ids, input_h
     device = bbox_preds.device
     bsz = bbox_preds.shape[0]
     
-    # ADD THIS: Normalization safety check
     if bboxes_xywh.max() <= 1.0:
         bboxes_xywh = bboxes_xywh.clone()
         bboxes_xywh[:, [0, 2]] *= input_w
         bboxes_xywh[:, [1, 3]] *= input_h
 
-    strides_list = [16, 8, 4, 2] 
+    # EDITED: Switched to the [32, 16, 8] strides
+    strides_list = [32, 16, 8] 
     centers, strides = generate_anchors(input_h, input_w, strides_list, device)
-    num_anchors = centers.shape[0] # Should be 102000
+    num_anchors = centers.shape[0] # Down to ~6,300
 
-    # Reshape predictions to match anchors: (B, 102000, 4) and (B, 102000, 10)
     pred_boxes_all = bbox_preds.permute(0, 2, 1) 
     pred_scores_all = bbox_cls.permute(0, 2, 1) 
 
-    # Clamp GT boxes inside image coordinates
     gt_xywh = bboxes_xywh.clone()
     bboxes_xyxy = _xywh_to_xyxy(gt_xywh)
     bboxes_xyxy[:, [0, 2]] = bboxes_xyxy[:, [0, 2]].clamp(0, float(input_w - 1))
     bboxes_xyxy[:, [1, 3]] = bboxes_xyxy[:, [1, 3]].clamp(0, float(input_h - 1))
 
-    # Top-K positive anchor assignment
     topk = 13
     cls_target = torch.zeros((bsz, num_classes, num_anchors), dtype=pred_scores_all.dtype, device=device)
     pos_mask = torch.zeros((bsz, num_anchors), dtype=torch.bool, device=device)
@@ -140,10 +129,8 @@ def compute_detection_loss(bbox_preds, bbox_cls, bboxes_xywh, class_ids, input_h
         cls_id = int(class_ids[bi].item())
         cls_target[bi, cls_id, topk_idx] = 1.0
 
-    # Classification Focal Loss
     cls_loss = _focal_bce(bbox_cls, cls_target)
 
-    # Box Regression CIoU Loss
     pred_xyxy_list, tgt_xyxy_list = [], []
     for bi in range(bsz):
         pos_idx = pos_mask[bi].nonzero(as_tuple=True)[0]
@@ -154,7 +141,6 @@ def compute_detection_loss(bbox_preds, bbox_cls, bboxes_xywh, class_ids, input_h
         anchor_c = centers[pos_idx]
         anchor_s = strides[pos_idx]
 
-        # Decode raw model outputs into absolute image pixels
         pred_xy = anchor_c + torch.tanh(raw[:, :2]) * anchor_s
         pred_wh = torch.exp(raw[:, 2:].clamp(-4.0, 4.0)) * anchor_s
         pred_xywh_i = torch.cat([pred_xy, pred_wh], dim=-1)
@@ -173,30 +159,25 @@ def compute_detection_loss(bbox_preds, bbox_cls, bboxes_xywh, class_ids, input_h
     else:
         box_loss = torch.tensor(0.0, device=device)
 
-    # Standard weighting: 1.0 for classification, 2.0 for boxes
     total_loss = (1.0 * cls_loss) + (2.0 * box_loss)
     return total_loss, cls_loss.detach().item(), box_loss.detach().item()
 
 
 def decode_predictions(bbox_preds, bbox_cls, input_h, input_w, conf_thresh=0.3):
-    """Decodes raw model outputs into final bounding boxes [x1, y1, x2, y2, conf, cls]."""
     device = bbox_preds.device
     bsz = bbox_preds.shape[0]
     
-    # Generate the same anchors used in training
-    strides_list = [16, 8, 4, 2]
+    # EDITED: Switched to the [32, 16, 8] strides
+    strides_list = [32, 16, 8]
     centers, strides = generate_anchors(input_h, input_w, strides_list, device)
     
-    # bbox_preds: (B, 4, A) -> (B, A, 4), bbox_cls: (B, C, A) -> (B, A, C)
     pred_boxes = bbox_preds.permute(0, 2, 1)
     pred_scores = bbox_cls.sigmoid().permute(0, 2, 1)
     
-    # Get max confidence and corresponding class for each anchor
-    max_scores, cls_idx = pred_scores.max(dim=-1) # (B, A)
+    max_scores, cls_idx = pred_scores.max(dim=-1)
     
     batch_results = []
     for bi in range(bsz):
-        # Filter by confidence threshold
         mask = max_scores[bi] > conf_thresh
         if not mask.any():
             batch_results.append(torch.empty((0, 6), device=device))
@@ -208,21 +189,15 @@ def decode_predictions(bbox_preds, bbox_cls, input_h, input_w, conf_thresh=0.3):
         b_centers = centers[mask]
         b_strides = strides[mask]
         
-        # Decode: raw -> absolute pixel xywh
         pred_xy = b_centers + torch.tanh(b_raw_boxes[:, :2]) * b_strides
         pred_wh = torch.exp(b_raw_boxes[:, 2:].clamp(-4.0, 4.0)) * b_strides
         pred_xywh = torch.cat([pred_xy, pred_wh], dim=-1)
         
-        # Convert to xyxy
         pred_xyxy = _xywh_to_xyxy(pred_xywh)
         pred_xyxy[:, [0, 2]] = pred_xyxy[:, [0, 2]].clamp(0, float(input_w - 1))
         pred_xyxy[:, [1, 3]] = pred_xyxy[:, [1, 3]].clamp(0, float(input_h - 1))
         
-        # Format: [x1, y1, x2, y2, conf, cls]
         result = torch.cat([pred_xyxy, b_scores.unsqueeze(1), b_cls.unsqueeze(1).float()], dim=1)
-        
-        # (Optional but recommended) In a full implementation, you would apply NMS here.
-        # For this stage, we will take the top prediction per ground truth via greedy matching.
         batch_results.append(result)
         
     return batch_results
@@ -230,7 +205,6 @@ def decode_predictions(bbox_preds, bbox_cls, input_h, input_w, conf_thresh=0.3):
 def evaluate_batch(decoded_preds, gt_xywh, gt_classes, input_h, input_w, iou_thresh=0.5):
     y_true, y_pred = [], []
     
-    # ADD THIS: Normalization safety check
     if gt_xywh.max() <= 1.0:
         gt_xywh = gt_xywh.clone()
         gt_xywh[:, [0, 2]] *= input_w
@@ -247,10 +221,9 @@ def evaluate_batch(decoded_preds, gt_xywh, gt_classes, input_h, input_w, iou_thr
         
         if len(preds) == 0:
             y_true.append(gt_cls)
-            y_pred.append(10) # 10 represents "Background" (False Negative)
+            y_pred.append(10)
             continue
             
-        # Calculate IoUs between all preds and the single GT
         gt_box_expanded = gt_box.expand(preds.shape[0], -1)
         ious = _bbox_iou_xyxy(preds[:, :4], gt_box_expanded)
         max_iou_val, max_iou_idx = ious.max(dim=0)
@@ -261,7 +234,7 @@ def evaluate_batch(decoded_preds, gt_xywh, gt_classes, input_h, input_w, iou_thr
             y_pred.append(pred_cls)
         else:
             y_true.append(gt_cls)
-            y_pred.append(10) # Missed the box completely
+            y_pred.append(10) 
             
     return y_true, y_pred
 
@@ -277,7 +250,6 @@ def plot_validation_samples(samples, output_dir):
         
         cx, cy, w, h = gt_box.float().cpu().numpy()
         
-        # ADD THIS: Handle normalized boxes for visualization
         if w <= 1.0 and h <= 1.0:
             input_h, input_w = img.shape[-2], img.shape[-1]
             cx *= input_w; w *= input_w
@@ -287,9 +259,7 @@ def plot_validation_samples(samples, output_dir):
         rect_gt = patches.Rectangle((x1, y1), w, h, linewidth=2, edgecolor='g', facecolor='none', label=f"GT: {int(gt_cls)}")
         ax.add_patch(rect_gt)
         
-        # Plot Top Pred (Red)
         if len(preds) > 0:
-            # Get the highest confidence prediction
             best_pred = preds[preds[:, 4].argmax()].float().cpu().numpy()
             px1, py1, px2, py2, pconf, pcls = best_pred
             rect_pred = patches.Rectangle((px1, py1), px2-px1, py2-py1, linewidth=2, edgecolor='r', facecolor='none', linestyle='--', label=f"Pred: {int(pcls)} ({pconf:.2f})")
@@ -303,7 +273,6 @@ def plot_validation_samples(samples, output_dir):
     plt.close()
 
 def plot_confusion_matrix(y_true, y_pred, num_classes, output_dir):
-    """Plots and saves the confusion matrix."""
     cm = confusion_matrix(y_true, y_pred, labels=list(range(num_classes + 1)))
     plt.figure(figsize=(10, 8))
     

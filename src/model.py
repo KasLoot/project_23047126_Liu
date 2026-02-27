@@ -63,17 +63,13 @@ class C3k2(nn.Module):
     ):
         super().__init__()
         self.c = int(c2 * e)
-        # print(f"2*c: {2 * self.c}, (2 + n)*c: {(2 + n) * self.c}")
         self.cv1 = Conv(c1, 2 * self.c, 1, 1)
         self.cv2 = Conv((2 + n) * self.c, c2, 1, 1)
         self.m = nn.ModuleList(Bottleneck(self.c, self.c, residual=residual, e=1.0) for _ in range(n))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = list(self.cv1(x).chunk(2, 1))
-        # print(f"After chunk: y[0] shape: {y[0].shape}, y[1] shape: {y[1].shape}")
-        # print(f"y[-1] shape before loop: {y[-1].shape}")
         y.extend(m(y[-1]) for m in self.m)
-        # print(f"y length: {len(y)}, shapes: {[t.shape for t in y]}")
         return self.cv2(torch.cat(y, 1))
     
 
@@ -93,7 +89,6 @@ class SPPF(nn.Module):
         y.extend(self.m(y[-1]) for _ in range(self.n))
         return self.cv2(torch.cat(y, 1))
     
-
 
 class MHAttention(nn.Module):
     def __init__(self, d_model, num_head):
@@ -152,13 +147,8 @@ class CNNTransformer(nn.Module):
     def forward(self, x):
         x = self.conv1(x)
         for block in self.transformer_blocks:
-            # FIX: Split the tensor into the "skip" half and the "process" half
             x_skip, x_process = torch.split(x, [self.d_model, self.d_model], dim=1)
-            
-            # Pass the second half through the block
             x_process = block(x_process)
-            
-            # Re-concatenate them out-of-place
             x = torch.cat([x_skip, x_process], dim=1)
             
         x = self.norm(self.conv2(x))
@@ -194,7 +184,6 @@ class BackBone(nn.Module):
         self.f2_1 = Conv(self.model_config.feature_channels[2], self.model_config.feature_channels[2], kernel_size=3, stride=2)
         self.f2_2 = C3k2(self.model_config.feature_channels[2], self.model_config.feature_channels[3], n=2)
 
-
         self.f3_1 = Conv(self.model_config.feature_channels[3], self.model_config.feature_channels[3], kernel_size=3, stride=2)
         self.f3_2 = C3k2(self.model_config.feature_channels[3], self.model_config.feature_channels[3], n=2)
 
@@ -205,11 +194,8 @@ class BackBone(nn.Module):
         self.cat = Concat(dim=1)
 
         self.n1 = C3k2(self.model_config.feature_channels[4] + self.model_config.feature_channels[3], self.model_config.feature_channels[3], n=2)
-        
         self.n2 = C3k2(self.model_config.feature_channels[3] + self.model_config.feature_channels[3], self.model_config.feature_channels[2], n=2)
-
         self.n3 = C3k2(self.model_config.feature_channels[2] + self.model_config.feature_channels[2], self.model_config.feature_channels[1], n=2)
-
         self.n4 = C3k2(self.model_config.feature_channels[1] + self.model_config.feature_channels[0], self.model_config.feature_channels[0], n=2)
 
 
@@ -219,15 +205,14 @@ class BackBone(nn.Module):
         f2 = self.f2_2(self.f2_1(f1))
         f3 = self.f3_2(self.f3_1(f2))
         f4 = self.f4_2(self.f4_1(f3))
-        # print(f"f1 shape: {f1.shape}, f2 shape: {f2.shape}, f3 shape: {f3.shape}, f4 shape: {f4.shape}")
 
         n1 = self.n1(self.cat([self.up(f4), f3]))
         n2 = self.n2(self.cat([self.up(n1), f2]))
         n3 = self.n3(self.cat([self.up(n2), f1]))
         n4 = self.n4(self.cat([self.up(n3), f0]))
-        # print(f"n1 shape: {n1.shape}, n2 shape: {n2.shape}, n3 shape: {n3.shape}, n4 shape: {n4.shape}")
 
-        return [n1, n2, n3, n4]
+        # ADDED f4 to the outputs so it can be passed to the DetectionHead (Stride 32)
+        return [f4, n1, n2, n3, n4]
     
 
 class ClassifierHead(nn.Module):
@@ -262,13 +247,20 @@ class DetectionHead(nn.Module):
         else:
             self.model_config = model_config
             
+        # Select target channels for Strides 32, 16, and 8
+        det_channels = [
+            self.model_config.feature_channels[4], # 256 (f4)
+            self.model_config.feature_channels[3], # 128 (n1)
+            self.model_config.feature_channels[2]  # 64  (n2)
+        ]
+
         self.box_head = nn.ModuleList([
             nn.Sequential(
                 Conv(ch, self.model_config.feature_channels[1], kernel_size=3, stride=1),
                 Conv(self.model_config.feature_channels[1], self.model_config.feature_channels[1], kernel_size=3, stride=1),
                 nn.Conv2d(self.model_config.feature_channels[1], 4, kernel_size=1)
             )
-            for ch in reversed(self.model_config.feature_channels[:-1])
+            for ch in det_channels
         ])
 
         self.cls_head = nn.ModuleList([
@@ -277,21 +269,20 @@ class DetectionHead(nn.Module):
                 Conv(self.model_config.feature_channels[1], self.model_config.feature_channels[1], kernel_size=3, stride=1),
                 nn.Conv2d(self.model_config.feature_channels[1], self.model_config.num_classes, kernel_size=1)
             )
-            for ch in reversed(self.model_config.feature_channels[:-1])
+            for ch in det_channels
         ])
 
-        # ADD THIS: Fix the catastrophic initialization
         self._initialize_biases()
 
     def _initialize_biases(self):
         prior = 0.01
         for m in self.cls_head:
-            last_conv = m[-1] # Target the final nn.Conv2d layer
+            last_conv = m[-1]
             nn.init.constant_(last_conv.bias, -math.log((1 - prior) / prior))
 
     def forward(self, x: list[torch.Tensor]):
-        bboxes = torch.cat([head(x[i]).view(x[i].shape[0], 4, -1)for i, head in enumerate(self.box_head)], dim=-1)
-        bbox_cls = torch.cat([head(x[i]).view(x[i].shape[0], self.model_config.num_classes, -1)for i, head in enumerate(self.cls_head)], dim=-1)
+        bboxes = torch.cat([head(x[i]).view(x[i].shape[0], 4, -1) for i, head in enumerate(self.box_head)], dim=-1)
+        bbox_cls = torch.cat([head(x[i]).view(x[i].shape[0], self.model_config.num_classes, -1) for i, head in enumerate(self.cls_head)], dim=-1)
         return bboxes, bbox_cls
 
 
@@ -309,14 +300,14 @@ class SegmentationHead(nn.Module):
         )
 
     def forward(self, x):
+        # x is now [n1, n2, n3, n4]
         target_size = x[-1].shape[2:]
         n1_up = F.interpolate(x[0], size=target_size, mode='nearest')
         n2_up = F.interpolate(x[1], size=target_size, mode='nearest')
         n3_up = F.interpolate(x[2], size=target_size, mode='nearest')
         seg_map = self.seg_head(torch.cat([n1_up, n2_up, n3_up, x[-1]], dim=1))
-        seg_map = F.interpolate(seg_map, scale_factor=2, mode='nearest')  # Upsample to original image size (assuming input was downsampled by factor of 4)
+        seg_map = F.interpolate(seg_map, scale_factor=2, mode='nearest') 
         return seg_map
-
 
 
 class HandGestureModel(nn.Module):
@@ -332,30 +323,30 @@ class HandGestureModel(nn.Module):
         self.segmentation_head = SegmentationHead(model_config=self.model_config)
 
     def forward(self, x):
-        features = self.backbone(x)
-        cls_logits = self.classifier_head(features[0])  # Use the second last feature map for classification
-        bbox_preds, bbox_cls = self.detection_head(features)  # Use all but the last feature map for detection
-        seg_map = self.segmentation_head(features)  # Use all feature maps for segmentation
+        features = self.backbone(x) # [f4, n1, n2, n3, n4]
+        
+        # Route specifically to avoid passing the massive n3 and n4 feature maps to detection
+        cls_logits = self.classifier_head(features[1])            # Use n1 (128 channels)
+        bbox_preds, bbox_cls = self.detection_head(features[:3])  # Use f4, n1, n2
+        seg_map = self.segmentation_head(features[1:])            # Use n1, n2, n3, n4
+
+        # print(f"bbox_preds shape: {bbox_preds.shape}, bbox_cls shape: {bbox_cls.shape}, seg_map shape: {seg_map.shape}")
+        
         return cls_logits, bbox_preds, bbox_cls, seg_map
 
 
-
-
-
-
 if __name__ == "__main__":
+    # Test suite adapted to the new returned feature list outputs
     model = C3k2(3, 128, n=2)
     x = torch.randn(1, 3, 640, 480)
     output = model(x)
     print(f"final output.shape: {output.shape}")
 
     print("\nTesting SPPF block:")
-
     model = SPPF(3, 128, k=5, n=3)
     x = torch.randn(1, 3, 640, 480)
     output = model(x)
     print(f"SPPF output.shape: {output.shape}")
-
 
     print("\nTesting MHAttention block:")
     model = MHAttention(d_model=128, num_head=4)
@@ -363,13 +354,11 @@ if __name__ == "__main__":
     output = model(x)
     print(f"MHAttention output.shape: {output.shape}")
 
-
     print("\nTesting TransformerBlock:")
     model = TransformerBlock(d_model=128, num_head=4)
     x = torch.randn(1, 128, 64, 64)
     output = model(x)
     print(f"TransformerBlock output.shape: {output.shape}")
-
 
     print("\nTesting CNNTransformer:")
     model = CNNTransformer(d_model=128, num_head=4, num_layers=2)
@@ -377,32 +366,27 @@ if __name__ == "__main__":
     output = model(x)
     print(f"CNNTransformer output.shape: {output.shape}")
 
-
     print("\nTesting BackBone:")
     model = BackBone()
     x = torch.randn(1, 3, 640, 480)
     backbone_output = model(x)
-    print(f"BackBone output.shape: {backbone_output[0].shape}, {backbone_output[1].shape}, {backbone_output[2].shape}, {backbone_output[3].shape}")
-
+    print(f"BackBone output shapes: {[out.shape for out in backbone_output]}")
 
     print("\nTesting ClassifierHead:")
     model = ClassifierHead()
-    x = torch.randn(1, 128, 40, 30)
-    output = model(x)
+    # Expects features[1] (n1)
+    output = model(backbone_output[1])
     print(f"ClassifierHead output.shape: {output.shape}")
-
 
     print("\nTesting DetectionHead:")
     model = DetectionHead()
-    bbox, bbox_cls = model(backbone_output)
+    bbox, bbox_cls = model(backbone_output[:3])
     print(f"DetectionHead bbox output.shape: {bbox.shape}, bbox_cls output.shape: {bbox_cls.shape}")
-
 
     print("\nTesting SegmentationHead:")
     model = SegmentationHead()
-    seg_map = model(backbone_output)
+    seg_map = model(backbone_output[1:])
     print(f"SegmentationHead output.shape: {seg_map.shape}")
-
 
     print("\nTesting HandGestureModel:")
     model = HandGestureModel()
