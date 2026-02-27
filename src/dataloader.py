@@ -20,7 +20,7 @@ class SegAugment:
         _, h, w = image.shape
         
         # 1. Convert cx, cy, w, h to corners to track them safely
-        cx, cy, bw, bh = bbox[0].item(), bbox[1].item(), bbox[2].item(), bbox[3].item()
+        cx, cy, bw, bh = bbox[0], bbox[1], bbox[2], bbox[3]
         x1 = cx - bw / 2.0
         y1 = cy - bh / 2.0
         x2 = cx + bw / 2.0
@@ -124,7 +124,7 @@ class HandGestureDataset(Dataset):
         image_tensor = torch.load(image_tensor_path)
         mask_tensor = torch.load(mask_tensor_path)
         class_id = image_info["class_id"]
-        bbox = image_info["bbox"]
+        bbox = torch.tensor(image_info["bbox"], dtype=torch.float32)
         if self.transform:
             image_tensor, mask_tensor, bbox = self.transform(image_tensor, mask_tensor, bbox)
         return image_tensor, mask_tensor, class_id, bbox

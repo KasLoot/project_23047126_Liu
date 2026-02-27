@@ -102,16 +102,38 @@ def gether_images_and_masks(dataset_path, output_dir):
     with open(os.path.join(output_image_dir.replace("images", ""), "image_info.json"), "w") as f:
         json.dump(all_image_info, f, indent=4)
 
+def image_to_tensor(dataset_path):
+    images_dir = os.path.join(dataset_path, "images")
+    masks_dir = os.path.join(dataset_path, "masks")
+    os.makedirs(os.path.join(dataset_path, "image_tensors"), exist_ok=True)
+    os.makedirs(os.path.join(dataset_path, "mask_tensors"), exist_ok=True)
+
+    for file in tqdm(os.listdir(images_dir), desc=f"Processing images in {dataset_path}"):
+        if file.endswith(".png"):
+            image_path = os.path.join(images_dir, file)
+            mask_path = os.path.join(masks_dir, file)
+            image_tensor = F.to_tensor(Image.open(image_path).convert("RGB"))
+            mask_tensor = F.to_tensor(Image.open(mask_path).convert("L"))
+            torch.save(image_tensor, os.path.join(dataset_path, "image_tensors", file.replace(".png", ".pt")))
+            torch.save(mask_tensor, os.path.join(dataset_path, "mask_tensors", file.replace(".png", ".pt")))
+
+
+
 
 if __name__ == "__main__":
-    original_train_dataset_path = "dataset/rgb_only_filtered_train"
+    # original_train_dataset_path = "dataset/rgb_only_filtered_train"
+
+    # train_dataset_path = "dataset/dataset_v1/train"
+
+    # gether_images_and_masks(original_train_dataset_path, train_dataset_path)
+
+    # original_val_dataset_path = "dataset/rgb_only_filtered_val"
+
+    # val_dataset_path = "dataset/dataset_v1/val"
+
+    # gether_images_and_masks(original_val_dataset_path, val_dataset_path)
 
     train_dataset_path = "dataset/dataset_v1/train"
-
-    gether_images_and_masks(original_train_dataset_path, train_dataset_path)
-
-    original_val_dataset_path = "dataset/rgb_only_filtered_val"
-
+    image_to_tensor(train_dataset_path)
     val_dataset_path = "dataset/dataset_v1/val"
-
-    gether_images_and_masks(original_val_dataset_path, val_dataset_path)
+    image_to_tensor(val_dataset_path)
