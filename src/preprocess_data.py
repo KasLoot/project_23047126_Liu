@@ -133,7 +133,12 @@ if __name__ == "__main__":
 
     # gether_images_and_masks(original_val_dataset_path, val_dataset_path)
 
-    train_dataset_path = "dataset/dataset_v1/train"
-    image_to_tensor(train_dataset_path)
-    val_dataset_path = "dataset/dataset_v1/val"
-    image_to_tensor(val_dataset_path)
+    # train_dataset_path = "dataset/dataset_v1/train"
+    # image_to_tensor(train_dataset_path)
+    # val_dataset_path = "dataset/dataset_v1/val"
+    # image_to_tensor(val_dataset_path)
+
+    test_tensor_path = "dataset/dataset_v1/train/mask_tensors/0.pt"
+    test_tensor = torch.load(test_tensor_path)
+    # print test_tensor value range
+    print(f"Test tensor value range: min={test_tensor.min().item()}, max={test_tensor.max().item()}")
