@@ -11,7 +11,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 
-from dataloader import HandGestureDataset, SegAugment
+from dataloader_1 import HandGestureDataset, SegAugment
 from model_1 import YOLO26, YOLO26MultiTask
 
 # ---------------------------------------------------------------------------

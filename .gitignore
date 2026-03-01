@@ -8,3 +8,5 @@ __pycache__/
 outputs/
 
 */.DS_Store
+
+dataset_v1.zip
