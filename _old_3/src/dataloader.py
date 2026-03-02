@@ -124,8 +124,8 @@ class HandGestureDataset(Dataset):
         mask_tensor_path = os.path.join(self.mask_tensor_dir, image_info["new_mask_name"].replace(".png", ".pt"))
         image_tensor = torch.load(image_tensor_path)
         mask_tensor = torch.load(mask_tensor_path)
-        class_id = torch.tensor([image_info["class_id"]])
-        bbox = torch.tensor([image_info["bbox"]], dtype=torch.float32)
+        class_id = image_info["class_id"]
+        bbox = torch.tensor(image_info["bbox"], dtype=torch.float32)
         if self.transform:
             image_tensor, mask_tensor, bbox = self.transform(image_tensor, mask_tensor, bbox)
         return image_tensor, mask_tensor, class_id, bbox

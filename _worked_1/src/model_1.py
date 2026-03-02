@@ -568,6 +568,15 @@ def _demo() -> None:
     print("one2one boxes:", tuple(aux["one2one"]["boxes"].shape))
     print("one2one scores:", tuple(aux["one2one"]["scores"].shape))
 
+    print(f"y shape: {y.shape}, expected (1, K, 6) where K <= max_det (300)")
+
+
+
+    multi_task_model = YOLO26MultiTask()
+    multi_task_model.to(device)
+    multi_task_model.eval()
+    torchinfo.summary(multi_task_model, input_size=(1, 3, 640, 480), device=str(device), depth=5)
+
 
 if __name__ == "__main__":
     _demo()
