@@ -63,8 +63,17 @@ def detection_collate_fn(batch):
     images, masks, class_ids, bboxes = zip(*batch)
     images = torch.stack(images, dim=0).float()
     masks = torch.stack(masks, dim=0)
-    class_ids = torch.as_tensor(class_ids, dtype=torch.long)
-    bboxes = torch.stack([b.float() for b in bboxes], dim=0)
+
+    # Normalize per-sample targets to avoid shape mismatch between
+    # augmented train set (bbox shape: [4]) and non-aug val set (bbox shape: [1, 4]).
+    class_ids = torch.as_tensor(
+        [int(torch.as_tensor(c).view(-1)[0].item()) for c in class_ids],
+        dtype=torch.long,
+    )
+    bboxes = torch.stack(
+        [torch.as_tensor(b, dtype=torch.float32).view(-1)[:4] for b in bboxes],
+        dim=0,
+    )
     return images, masks, class_ids, bboxes
 
 
@@ -216,6 +225,14 @@ def _branch_loss(
     scores = branch_out["scores"] # (B, C, A)
     feats = branch_out["feats"]
 
+    # Canonicalize target shapes defensively.
+    if class_ids.ndim > 1:
+        class_ids = class_ids.view(class_ids.shape[0], -1)[:, 0]
+    if bboxes_xywh.ndim == 3 and bboxes_xywh.shape[1] == 1:
+        bboxes_xywh = bboxes_xywh[:, 0, :]
+    if bboxes_xywh.ndim != 2 or bboxes_xywh.shape[-1] != 4:
+        raise ValueError(f"Expected bboxes shape (B, 4), got {tuple(bboxes_xywh.shape)}")
+
     bsz, _, num_anchors = boxes.shape
     device = boxes.device
 
@@ -230,8 +247,10 @@ def _branch_loss(
     bboxes_xyxy = _xywh_to_xyxy(gt_xywh)
     
     # Clamp GT boxes inside image using the corner coordinates
-    bboxes_xyxy[:, [0, 2]] = bboxes_xyxy[:, [0, 2]].clamp(0, float(input_w - 1))
-    bboxes_xyxy[:, [1, 3]] = bboxes_xyxy[:, [1, 3]].clamp(0, float(input_h - 1))
+    bboxes_xyxy[:, 0] = bboxes_xyxy[:, 0].clamp(0, float(input_w - 1))
+    bboxes_xyxy[:, 2] = bboxes_xyxy[:, 2].clamp(0, float(input_w - 1))
+    bboxes_xyxy[:, 1] = bboxes_xyxy[:, 1].clamp(0, float(input_h - 1))
+    bboxes_xyxy[:, 3] = bboxes_xyxy[:, 3].clamp(0, float(input_h - 1))
     # --- FIX ENDS HERE ---
 
     # ------------------------------------------------------------------
@@ -248,6 +267,11 @@ def _branch_loss(
         _, topk_idx = d2.topk(k, largest=False)
         pos_mask[bi, topk_idx] = True
         cls_id = int(class_ids[bi].item())
+        if cls_id < 0 or cls_id >= num_classes:
+            raise ValueError(
+                f"class_id={cls_id} is out of range for num_classes={num_classes}. "
+                "Check dataset label indexing (expected [0, num_classes-1])."
+            )
         cls_target[bi, cls_id, topk_idx] = 1.0
 
     # ------------------------------------------------------------------
@@ -282,8 +306,10 @@ def _branch_loss(
         pred_wh = torch.exp(raw[:, 2:].clamp(-4.0, 4.0)) * anchor_s
         pred_xywh_i = torch.cat([pred_xy, pred_wh], dim=-1)
         pred_xyxy_i = _xywh_to_xyxy(pred_xywh_i)
-        pred_xyxy_i[:, [0, 2]] = pred_xyxy_i[:, [0, 2]].clamp(0, float(input_w - 1))
-        pred_xyxy_i[:, [1, 3]] = pred_xyxy_i[:, [1, 3]].clamp(0, float(input_h - 1))
+        pred_xyxy_i[:, 0] = pred_xyxy_i[:, 0].clamp(0, float(input_w - 1))
+        pred_xyxy_i[:, 2] = pred_xyxy_i[:, 2].clamp(0, float(input_w - 1))
+        pred_xyxy_i[:, 1] = pred_xyxy_i[:, 1].clamp(0, float(input_h - 1))
+        pred_xyxy_i[:, 3] = pred_xyxy_i[:, 3].clamp(0, float(input_h - 1))
 
         # Target box is the same for all positive anchors of this image.
         tgt_xyxy_i = bboxes_xyxy[bi].unsqueeze(0).expand_as(pred_xyxy_i)
