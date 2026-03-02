@@ -78,7 +78,8 @@ def gether_images_and_masks(dataset_path, output_dir):
 
                             class_name = mask_dir.split("/")[-3].split("_")[1]
                             class_id = int(mask_dir.split("/")[-3].split("_")[0][1:]) - 1
-                            bbox = mask_to_bbox(np.array(Image.open(mask_path).convert("L")).transpose(0, 2, 1))
+                            
+                            bbox = mask_to_bbox(np.array(Image.open(mask_path).convert("L")).transpose((1, 0))) # (H, W) -> (W, H)
 
                             image_info = {
                                 "name_index": image_name_index,
