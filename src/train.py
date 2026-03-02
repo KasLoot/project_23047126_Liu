@@ -122,6 +122,15 @@ def _xywh_to_xyxy(b: torch.Tensor) -> torch.Tensor:
     return torch.stack((cx - hw, cy - hh, cx + hw, cy + hh), -1)
 
 
+def _clamp_xyxy(b: torch.Tensor, input_h: int, input_w: int) -> torch.Tensor:
+    """Out-of-place clamp for xyxy boxes to avoid in-place autograd issues."""
+    x1 = b[..., 0].clamp(0, float(input_w - 1))
+    y1 = b[..., 1].clamp(0, float(input_h - 1))
+    x2 = b[..., 2].clamp(0, float(input_w - 1))
+    y2 = b[..., 3].clamp(0, float(input_h - 1))
+    return torch.stack((x1, y1, x2, y2), dim=-1)
+
+
 # ---------------------------------------------------------------------------
 # IoU helpers
 # ---------------------------------------------------------------------------
@@ -244,13 +253,7 @@ def _branch_loss(
     gt_xywh = bboxes_xywh.clone()
 
     # 2. Convert to xyxy specifically for the clamping and later CIoU calculations
-    bboxes_xyxy = _xywh_to_xyxy(gt_xywh)
-    
-    # Clamp GT boxes inside image using the corner coordinates
-    bboxes_xyxy[:, 0] = bboxes_xyxy[:, 0].clamp(0, float(input_w - 1))
-    bboxes_xyxy[:, 2] = bboxes_xyxy[:, 2].clamp(0, float(input_w - 1))
-    bboxes_xyxy[:, 1] = bboxes_xyxy[:, 1].clamp(0, float(input_h - 1))
-    bboxes_xyxy[:, 3] = bboxes_xyxy[:, 3].clamp(0, float(input_h - 1))
+    bboxes_xyxy = _clamp_xyxy(_xywh_to_xyxy(gt_xywh), input_h, input_w)
     # --- FIX ENDS HERE ---
 
     # ------------------------------------------------------------------
@@ -305,11 +308,7 @@ def _branch_loss(
         pred_xy = anchor_c + torch.tanh(raw[:, :2]) * anchor_s
         pred_wh = torch.exp(raw[:, 2:].clamp(-4.0, 4.0)) * anchor_s
         pred_xywh_i = torch.cat([pred_xy, pred_wh], dim=-1)
-        pred_xyxy_i = _xywh_to_xyxy(pred_xywh_i)
-        pred_xyxy_i[:, 0] = pred_xyxy_i[:, 0].clamp(0, float(input_w - 1))
-        pred_xyxy_i[:, 2] = pred_xyxy_i[:, 2].clamp(0, float(input_w - 1))
-        pred_xyxy_i[:, 1] = pred_xyxy_i[:, 1].clamp(0, float(input_h - 1))
-        pred_xyxy_i[:, 3] = pred_xyxy_i[:, 3].clamp(0, float(input_h - 1))
+        pred_xyxy_i = _clamp_xyxy(_xywh_to_xyxy(pred_xywh_i), input_h, input_w)
 
         # Target box is the same for all positive anchors of this image.
         tgt_xyxy_i = bboxes_xyxy[bi].unsqueeze(0).expand_as(pred_xyxy_i)
