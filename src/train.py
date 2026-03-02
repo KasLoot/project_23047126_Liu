@@ -23,7 +23,7 @@ from model import YOLO26MultiTask
 class TrainConfig:
     train_dataset_path: str = "dataset/dataset_v1/train"
     val_dataset_path: str = "dataset/dataset_v1/val"
-    output_dir: str = "output/stage_1/train_1"
+    output_dir: str = "outputs/stage_1/train_1"
     epochs: int = 80
     batch_size: int = 16
     num_workers: int = 0
