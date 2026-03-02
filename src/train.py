@@ -41,8 +41,8 @@ def train_stage_1(config: Stage_1_Config):
     os.makedirs(config.output_dir, exist_ok=True)
 
     # --- Dataset & Dataloader ---
-    train_dataset = HandGestureDataset(root_dir='/workspace/project_23047126_Liu/dataset/dataset_v1/train', transform=SegAugment())
-    val_dataset = HandGestureDataset(root_dir='/workspace/project_23047126_Liu/dataset/dataset_v1/val', transform=None)
+    train_dataset = HandGestureDataset(root_dir='dataset/dataset_v1/train', transform=SegAugment())
+    val_dataset = HandGestureDataset(root_dir='dataset/dataset_v1/val', transform=None)
     train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
     

@@ -73,8 +73,8 @@ class SegAugment:
         scale_x = target_w / w
         scale_y = target_h / h
         
-        image = F.resize(image, (target_h, target_w), interpolation=InterpolationMode.BILINEAR)
-        mask = F.resize(mask, (target_h, target_w), interpolation=InterpolationMode.NEAREST)
+        image = F.resize(image, (target_w, target_h), interpolation=InterpolationMode.BILINEAR)
+        mask = F.resize(mask, (target_w, target_h), interpolation=InterpolationMode.NEAREST)
         
         x1 *= scale_x
         x2 *= scale_x
