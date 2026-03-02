@@ -17,7 +17,9 @@ class SegAugment:
 
     def __call__(self, image, mask, bbox):
         # bbox is expected to be [cx, cy, w, h] as a 1D tensor
-        _, h, w = image.shape
+        _, w, h = image.shape
+
+        bbox = bbox[0]
         
         # 1. Convert cx, cy, w, h to corners to track them safely
         cx, cy, bw, bh = bbox[0], bbox[1], bbox[2], bbox[3]
@@ -126,8 +128,11 @@ class HandGestureDataset(Dataset):
         mask_tensor = torch.load(mask_tensor_path)
         class_id = torch.tensor([image_info["class_id"]])
         bbox = torch.tensor([image_info["bbox"]], dtype=torch.float32)
+        print(f"Loaded sample {idx}: image {image_tensor.shape}, mask {mask_tensor.shape}, class_id {class_id.item()}, bbox {bbox.tolist()}")
         if self.transform:
             image_tensor, mask_tensor, bbox = self.transform(image_tensor, mask_tensor, bbox)
+        print(f"Transformed sample {idx}: image {image_tensor.shape}, mask {mask_tensor.shape}, class_id {class_id.item()}, bbox {bbox.tolist()}")
+
         return image_tensor, mask_tensor, class_id, bbox
     
 

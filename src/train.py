@@ -41,23 +41,19 @@ def train_stage_1(config: Stage_1_Config):
     os.makedirs(config.output_dir, exist_ok=True)
 
     # --- Dataset & Dataloader ---
-    full_dataset = HandGestureDataset(root_dir='data/processed', transform=SegAugment())
-    dataset_size = len(full_dataset)
-    indices = list(range(dataset_size))
-    random.shuffle(indices)
+    train_dataset = HandGestureDataset(root_dir='/workspace/project_23047126_Liu/dataset/dataset_v1/train', transform=SegAugment())
+    val_dataset = HandGestureDataset(root_dir='/workspace/project_23047126_Liu/dataset/dataset_v1/val', transform=None)
+    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
     
-    split_idx = int(0.8 * dataset_size)
-    train_indices, val_indices = indices[:split_idx], indices[split_idx:]
-    
-    train_subset = Subset(full_dataset, train_indices)
-    val_subset = Subset(full_dataset, val_indices)
-    
-    train_loader = DataLoader(train_subset, batch_size=config.batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_subset, batch_size=config.batch_size, shuffle=False, num_workers=4)
 
     # --- Model ---
-    model_config = ModelConfig(num_classes=10)  # Assuming 10 gesture classes
+    model_config = ModelConfig()  # Assuming 10 gesture classes
     model = HandGestureModel_v3(model_config).to(config.device)
+    for param in model.classifier_head.parameters(): param.requires_grad = False
+    for param in model.segmentation_head.parameters(): param.requires_grad = False
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Stage 1 Training (Backbone + Detection Head)\n Total Trainable Params: {trainable_params:,}")
 
     # --- Optimizer & Scheduler ---
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
@@ -74,23 +70,34 @@ def train_stage_1(config: Stage_1_Config):
         
         for image_tensor, mask_tensor, class_id, bbox in train_loader:
             image_tensor = image_tensor.to(config.device)
-            mask_tensor = mask_tensor.to(config.device)
+            # mask_tensor = mask_tensor.to(config.device)
             class_id = class_id.to(config.device)
             bbox = bbox.to(config.device)
+            print(image_tensor.shape, class_id.shape, bbox.shape)
 
             optimizer.zero_grad()
-            class_logits, bbox_preds = model(image_tensor)
+            cls_logits, bbox_preds, bbox_cls, seg_map = model(image_tensor)
 
             # --- Loss Calculation ---
-            classification_loss = F.cross_entropy(class_logits, class_id)
-            bbox_loss = F.mse_loss(bbox_preds, bbox)
-            loss = classification_loss + bbox_loss
+            # classification_loss = F.cross_entropy(cls_logits, class_id)
+            # bbox_loss = F.mse_loss(bbox_preds, bbox)
+            # loss = classification_loss + bbox_loss
 
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+            # loss.backward()
+            # optimizer.step()
+            # scheduler.step()
 
-            epoch_loss += loss.item()
-        
+            # epoch_loss += loss.item()
+
+            break
+
         print(f"Epoch {epoch}, Loss: {epoch_loss / len(train_loader)}")
         break
+
+
+
+if __name__ == "__main__":
+    set_seed(42)
+    empty_cache()
+    config = Stage_1_Config()
+    train_stage_1(config)

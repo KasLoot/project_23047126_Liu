@@ -78,7 +78,7 @@ def gether_images_and_masks(dataset_path, output_dir):
 
                             class_name = mask_dir.split("/")[-3].split("_")[1]
                             class_id = int(mask_dir.split("/")[-3].split("_")[0][1:]) - 1
-                            bbox = mask_to_bbox(np.array(Image.open(mask_path).convert("L")))
+                            bbox = mask_to_bbox(np.array(Image.open(mask_path).convert("L")).transpose(0, 2, 1))
 
                             image_info = {
                                 "name_index": image_name_index,
@@ -112,8 +112,8 @@ def image_to_tensor(dataset_path):
         if file.endswith(".png"):
             image_path = os.path.join(images_dir, file)
             mask_path = os.path.join(masks_dir, file)
-            image_tensor = F.to_tensor(Image.open(image_path).convert("RGB"))
-            mask_tensor = F.to_tensor(Image.open(mask_path).convert("L"))
+            image_tensor = F.to_tensor(Image.open(image_path).convert("RGB")).permute(0, 2, 1) # (C, H, W) -> (C, W, H)
+            mask_tensor = F.to_tensor(Image.open(mask_path).convert("L")).permute(0, 2, 1) # (1, H, W) -> (1, W, H)
             torch.save(image_tensor, os.path.join(dataset_path, "image_tensors", file.replace(".png", ".pt")))
             torch.save(mask_tensor, os.path.join(dataset_path, "mask_tensors", file.replace(".png", ".pt")))
 
@@ -121,24 +121,25 @@ def image_to_tensor(dataset_path):
 
 
 if __name__ == "__main__":
-    # original_train_dataset_path = "dataset/rgb_only_filtered_train"
+    original_train_dataset_path = "dataset/rgb_only_filtered_train"
 
-    # train_dataset_path = "dataset/dataset_v1/train"
+    train_dataset_path = "dataset/dataset_v1/train"
 
-    # gether_images_and_masks(original_train_dataset_path, train_dataset_path)
+    gether_images_and_masks(original_train_dataset_path, train_dataset_path)
 
-    # original_val_dataset_path = "dataset/rgb_only_filtered_val"
+    original_val_dataset_path = "dataset/rgb_only_filtered_val"
 
-    # val_dataset_path = "dataset/dataset_v1/val"
+    val_dataset_path = "dataset/dataset_v1/val"
 
-    # gether_images_and_masks(original_val_dataset_path, val_dataset_path)
+    gether_images_and_masks(original_val_dataset_path, val_dataset_path)
 
-    # train_dataset_path = "dataset/dataset_v1/train"
-    # image_to_tensor(train_dataset_path)
-    # val_dataset_path = "dataset/dataset_v1/val"
-    # image_to_tensor(val_dataset_path)
+    train_dataset_path = "dataset/dataset_v1/train"
+    image_to_tensor(train_dataset_path)
+    val_dataset_path = "dataset/dataset_v1/val"
+    image_to_tensor(val_dataset_path)
 
-    test_tensor_path = "dataset/dataset_v1/train/mask_tensors/0.pt"
+    test_tensor_path = "dataset/dataset_v1/train/image_tensors/0.pt"
     test_tensor = torch.load(test_tensor_path)
     # print test_tensor value range
     print(f"Test tensor value range: min={test_tensor.min().item()}, max={test_tensor.max().item()}")
+    print(f"Test tensor shape: {test_tensor.shape}")
