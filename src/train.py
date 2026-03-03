@@ -28,7 +28,7 @@ class TrainConfig:
     batch_size: int = 16
     num_workers: int = 0
     lr: float = 1e-3
-    weight_decay: float = 1e-4
+    weight_decay: float = 1e-2
     val_split: float = 0.1
     seed: int = 42
     num_classes: int = 10
@@ -264,10 +264,18 @@ def _branch_loss(
 
     for bi in range(bsz):
         gt_cx, gt_cy = gt_xywh[bi, 0], gt_xywh[bi, 1]
+        # Calculate squared distance
         d2 = (centers[:, 0] - gt_cx) ** 2 + (centers[:, 1] - gt_cy) ** 2
+
+        # Get the stride area (stride_x * stride_y) for each anchor
+        stride_area = strides[:, 0] * strides[:, 1]
+
+        # Normalize the distance by the stride area
+        # This makes the distance relative to the feature map's resolution!
+        normalized_d2 = d2 / stride_area.clamp(min=1e-6)
         # Assign top-k nearest anchors as positive
         k = min(topk, num_anchors)
-        _, topk_idx = d2.topk(k, largest=False)
+        _, topk_idx = normalized_d2.topk(k, largest=False)
         pos_mask[bi, topk_idx] = True
         cls_id = int(class_ids[bi].item())
         if cls_id < 0 or cls_id >= num_classes:
@@ -676,11 +684,11 @@ def _init_weights(model: nn.Module) -> None:
 def parse_args() -> TrainConfig:
     parser = argparse.ArgumentParser(description="Train YOLO26 from-scratch on HandGestureDataset")
     parser.add_argument("--output-dir", type=str, default="outputs/stage_1/train_1")
-    parser.add_argument("--epochs", type=int, default=80)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--lr", type=float, default=5e-4)
-    parser.add_argument("--weight-decay", type=float, default=1e-3)
+    parser.add_argument("--weight-decay", type=float, default=1e-2)
     parser.add_argument("--val-split", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-classes", type=int, default=10)

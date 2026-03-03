@@ -30,11 +30,11 @@ class SegAugment:
 
         # --- Geometric Transforms ---
         
-        # # Horizontal flip
-        # if random.random() < 0.5:
-        #     image = F.hflip(image)
-        #     mask = F.hflip(mask)
-        #     x1, x2 = w - x2, w - x1
+        # Horizontal flip
+        if random.random() < 0.5:
+            image = F.hflip(image)
+            mask = F.hflip(mask)
+            x1, x2 = w - x2, w - x1
 
         # # Vertical flip
         # if random.random() < 0.3:
