@@ -21,7 +21,7 @@ from model import YOLO26MultiTask
 class TrainConfig:
     train_dataset_path: str = "dataset/dataset_v1/train"
     val_dataset_path: str = "dataset/dataset_v1/val"
-    output_dir: str = "outputs/stage_2/train_1"
+    output_dir: str = "outputs/stage_2/train_2"
     epochs: int = 20
     batch_size: int = 32
     num_workers: int = 0
@@ -185,7 +185,7 @@ def train() -> None:
 
     # 1. Initialize and Freeze
     model = build_model_and_profile_gpu_usage(device)
-    model.freeze_base_model()
+    # model.freeze_base_model()
 
     # 2. Optimizer strictly for the new heads
     import itertools
@@ -242,7 +242,7 @@ def train() -> None:
         
         if epoch_train_loss < best_train_loss:
             best_train_loss = epoch_train_loss
-        torch.save(model.state_dict(), f"{cfg.output_dir}/stage_2_last.pt")
+        torch.save(model.state_dict(), f"{cfg.output_dir}/last.pt")
 
         # Tracking variables for validation
         epoch_val_loss = 0.0
@@ -288,8 +288,8 @@ def train() -> None:
 
         if epoch_val_loss < best_val_loss:
                 best_val_loss = epoch_val_loss
-                torch.save(model.state_dict(), f"{cfg.output_dir}/stage_2_best.pt")
-                print(f"New best model saved to {cfg.output_dir}/stage_2_best.pt with Mean Val Loss: {best_val_loss/len(val_loader):.3f}")
+                torch.save(model.state_dict(), f"{cfg.output_dir}/best.pt")
+                print(f"New best model saved to {cfg.output_dir}/best.pt with Mean Val Loss: {best_val_loss/len(val_loader):.3f}")
 
 if __name__ == "__main__":
     train()

@@ -261,7 +261,7 @@ if __name__ == "__main__":
         default="dataset/dataset_v1/val/images",
         help="Path to test image folder (JPEG set, e.g. 1600x1200)",
     )
-    parser.add_argument("--weights", type=str, default="outputs/stage_2/train_1/stage_2_best.pt")
+    parser.add_argument("--weights", type=str, default="outputs/stage_2/train_2/best.pt")
     parser.add_argument("--conf", type=float, default=0.4)
     parser.add_argument("--num_images", type=int, default=10, help="Number of images sampled for each canvas")
     args = parser.parse_args()
