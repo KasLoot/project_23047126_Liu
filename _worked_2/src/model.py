@@ -159,16 +159,6 @@ class Attention(nn.Module):
         return self.proj(y)
 
 
-
-
-
-
-
-
-
-
-
-
 class PSABlock(nn.Module):
     def __init__(self, c: int):
         super().__init__()
@@ -205,173 +195,6 @@ class Concat(nn.Module):
 
     def forward(self, xs: list[torch.Tensor]) -> torch.Tensor:
         return torch.cat(xs, dim=self.dim)
-
-
-@dataclass
-class ScaleCfg:
-    depth: float
-    width: float
-    max_channels: int
-
-
-SCALES: dict[str, ScaleCfg] = {
-    "n": ScaleCfg(0.50, 0.25, 1024),
-    "s": ScaleCfg(0.50, 0.50, 1024),
-    "m": ScaleCfg(0.50, 1.00, 512),
-    "l": ScaleCfg(1.00, 1.00, 512),
-    "x": ScaleCfg(1.00, 1.50, 512),
-}
-
-
-def make_divisible(v: float, divisor: int = 8) -> int:
-    return int((v + divisor / 2) // divisor * divisor)
-
-
-def scale_channels(c: int, w: float, max_ch: int) -> int:
-    return make_divisible(min(c, max_ch) * w, 8)
-
-
-def scale_depth(n: int, d: float) -> int:
-    return max(round(n * d), 1) if n > 1 else n
-
-
-class CrossAttention(nn.Module):
-    """Lightweight spatial attention used by PSA blocks."""
-
-    def __init__(self, qkv_dim: list[int], num_heads: int = 4, attn_ratio: float = 0.5):
-        super().__init__()
-        self.num_heads = max(num_heads, 1)
-
-        out_dim = qkv_dim[0]
-        self.wq = Conv(qkv_dim[0], out_dim, 1, act=False)
-        self.wk = Conv(qkv_dim[1], out_dim, 1, act=False)
-        self.wv = Conv(qkv_dim[2], out_dim, 1, act=False)
-        self.proj = Conv(out_dim, out_dim, 1, act=False)
-        self.pe = Conv(out_dim, out_dim, 3, 1, g=out_dim, act=False)
-
-        if out_dim % self.num_heads != 0:
-            raise ValueError(f"CrossAttention out_dim={out_dim} must be divisible by num_heads={self.num_heads}")
-
-    def split_heads(self, x: torch.Tensor) -> torch.Tensor:
-        b, c, h, w = x.shape
-        n = h * w
-        head_dim = c // self.num_heads
-        # (B, C, H, W) -> (B, heads, N, head_dim)
-        return x.reshape(b, self.num_heads, head_dim, n).permute(0, 1, 3, 2)
-
-    def merge_heads(self, x: torch.Tensor, h: int, w: int) -> torch.Tensor:
-        # (B, heads, N, head_dim) -> (B, C, H, W)
-        b, heads, n, head_dim = x.shape
-        return x.permute(0, 1, 3, 2).contiguous().view(b, heads * head_dim, h, w)
-
-    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-        b, _, hq, wq = q.shape
-        q = self.wq(q)
-        k = self.wk(k)
-        v = self.wv(v)
-
-        q = self.split_heads(q)  # (B, heads, Nq, d)
-        k = self.split_heads(k)  # (B, heads, Nk, d)
-        v = self.split_heads(v)  # (B, heads, Nk, d)
-
-        scale = q.shape[-1] ** -0.5
-        attn = (q @ k.transpose(-2, -1)) * scale  # (B, heads, Nq, Nk)
-        attn = attn.softmax(dim=-1)
-        y = attn @ v  # (B, heads, Nq, d)
-        y = self.merge_heads(y, hq, wq) + self.pe(self.merge_heads(q, hq, wq))
-        return self.proj(y)
-
-
-class BackBone(nn.Module):
-    """YOLO26 detect model (from scratch / inspectable implementation)."""
-
-    def __init__(self, nc: int = 10, scale: Literal["n", "s", "m", "l", "x"] = "n", end2end: bool = True, reg_max: int = 1):
-        super().__init__()
-        if scale not in SCALES:
-            raise ValueError(f"Unsupported scale '{scale}'. Choose from {list(SCALES)}")
-
-        cfg = SCALES[scale]
-        d, w, max_ch = cfg.depth, cfg.width, cfg.max_channels
-
-        # --- Backbone channels ---
-        self.c1 = scale_channels(64, w, max_ch)
-        self.c2 = scale_channels(128, w, max_ch)
-        self.c3 = scale_channels(256, w, max_ch)
-        self.c4 = scale_channels(512, w, max_ch)
-        self.c5 = scale_channels(1024, w, max_ch)
-        print(f"Scaled channels (c1-c5): {self.c1}, {self.c2}, {self.c3}, {self.c4}, {self.c5}")
-
-        n2 = scale_depth(2, d)
-
-        # Backbone
-        self.b0 = Conv(3, self.c1, 3, 2)  # P1/2
-        self.b1 = Conv(self.c1, self.c2, 3, 2)  # P2/4
-        self.b2 = C3k2(self.c2, self.c3, n=n2, c3k=False, e=0.25, shortcut=False)
-
-        self.b3 = Conv(self.c3, self.c3, 3, 2)  # P3/8
-        self.b4 = C3k2(self.c3, self.c4, n=n2, c3k=False, e=0.25, shortcut=False)
-
-        self.b5 = Conv(self.c4, self.c4, 3, 2)  # P4/16
-        self.b6 = C3k2(self.c4, self.c4, n=n2, c3k=True, e=0.5, shortcut=True)
-
-        self.b7 = Conv(self.c4, self.c5, 3, 2)  # P5/32
-        self.b8 = C3k2(self.c5, self.c5, n=n2, c3k=True, e=0.5, shortcut=True)
-
-        self.b9 = SPPF(self.c5, self.c5, k=5, n=3)
-        self.b10 = C2PSA(self.c5, self.c5, n=n2)
-
-        # Neck / head feature aggregation
-        self.up = nn.Upsample(scale_factor=2, mode="nearest")
-        self.cat = Concat(1)
-
-        self.h13 = C3k2(self.c5 + self.c4, self.c4, n=n2, c3k=True, e=0.5, shortcut=True)
-        self.h16 = C3k2(self.c4 + self.c4, self.c3, n=n2, c3k=True, e=0.5, shortcut=True)
-
-        self.h17 = Conv(self.c3, self.c3, 3, 2)
-        self.h19 = C3k2(self.c3 + self.c4, self.c4, n=n2, c3k=True, e=0.5, shortcut=True)
-
-        self.h20 = Conv(self.c4, self.c4, 3, 2)
-        self.h22 = C3k2(self.c4 + self.c5, self.c5, n=1, c3k=True, e=0.5, shortcut=True)
-
-        # NOTE: In this backbone, p3 is produced by `b4(self.b3(...))` and has `c4` channels.
-        # Keep q/k/v channel dims consistent with the actual tensors passed in forward().
-        self.n4_attn = CrossAttention(qkv_dim=[self.c4, self.c4, self.c4], num_heads=max(self.c4 // 32, 1), attn_ratio=0.5)
-        self.n5_attn = CrossAttention(qkv_dim=[self.c5, self.c4, self.c4], num_heads=max(self.c5 // 32, 1), attn_ratio=0.5)
-
-        self.nc = nc
-        self.scale = scale
-        self.end2end = end2end
-        self.reg_max = reg_max
-
-    def forward(self, x: torch.Tensor):
-        # Backbone
-        x = self.b0(x)
-        x = self.b1(x)
-        x = self.b2(x)
-
-        p3 = self.b3(x)
-        p3 = self.b4(p3)
-
-        p4 = self.b5(p3)
-        p4 = self.b6(p4)
-
-        p5 = self.b7(p4)
-        p5 = self.b8(p5)
-        p5 = self.b9(p5)
-        p5 = self.b10(p5)
-
-        # PAN/FPN neck
-        n4 = self.h13(self.cat([self.up(p5), p4]))  # P4/16
-        n4 = self.n4_attn(n4, p3, p3)
-        n3 = self.h16(self.cat([self.up(n4), p3]))  # P3/8 (small)
-
-        n4_out = self.h19(self.cat([self.h17(n3), n4]))  # P4/16 (medium)
-        n5_out = self.h22(self.cat([self.h20(n4_out), p5]))  # P5/32 (large)
-        n5_out = self.n5_attn(n5_out, p4, p4)
-
-        return [n3, n4_out, n5_out]
-
-
 
 
 # -----------------------------
@@ -438,14 +261,142 @@ class Detect(nn.Module):
     def forward(self, x: list[torch.Tensor]):
         one2many = self._forward_branch(x, self.cv2, self.cv3)
 
+        if self.training:
+            if self.end2end:
+                x_detach = [xi.detach() for xi in x]
+                one2one = self._forward_branch(x_detach, self.one2one_cv2, self.one2one_cv3)
+                return {"one2many": one2many, "one2one": one2one}
+            return one2many
+
+        if self.end2end:
+            x_detach = [xi.detach() for xi in x]
+            one2one = self._forward_branch(x_detach, self.one2one_cv2, self.one2one_cv3)
+            y = self._postprocess_one2one(one2one["boxes"], one2one["scores"])
+            return y, {"one2many": one2many, "one2one": one2one}
+
         return one2many
 
 
+# -----------------------------
+# YOLO26 model definition
+# -----------------------------
+
+
+@dataclass
+class ScaleCfg:
+    depth: float
+    width: float
+    max_channels: int
+
+
+SCALES: dict[str, ScaleCfg] = {
+    "n": ScaleCfg(0.50, 0.25, 1024),
+    "s": ScaleCfg(0.50, 0.50, 1024),
+    "m": ScaleCfg(0.50, 1.00, 512),
+    "l": ScaleCfg(1.00, 1.00, 512),
+    "x": ScaleCfg(1.00, 1.50, 512),
+}
+
+
+def make_divisible(v: float, divisor: int = 8) -> int:
+    return int((v + divisor / 2) // divisor * divisor)
+
+
+def scale_channels(c: int, w: float, max_ch: int) -> int:
+    return make_divisible(min(c, max_ch) * w, 8)
+
+
+def scale_depth(n: int, d: float) -> int:
+    return max(round(n * d), 1) if n > 1 else n
+
+
+class BackBone(nn.Module):
+    """YOLO26 detect model (from scratch / inspectable implementation)."""
+
+    def __init__(self, nc: int = 80, scale: Literal["n", "s", "m", "l", "x"] = "n", end2end: bool = True, reg_max: int = 1):
+        super().__init__()
+        if scale not in SCALES:
+            raise ValueError(f"Unsupported scale '{scale}'. Choose from {list(SCALES)}")
+
+        cfg = SCALES[scale]
+        d, w, max_ch = cfg.depth, cfg.width, cfg.max_channels
+
+        # --- Backbone channels ---
+        self.c1 = scale_channels(64, w, max_ch)
+        self.c2 = scale_channels(128, w, max_ch)
+        self.c3 = scale_channels(256, w, max_ch)
+        self.c4 = scale_channels(512, w, max_ch)
+        self.c5 = scale_channels(1024, w, max_ch)
+        print(f"Scaled channels (c1-c5): {self.c1}, {self.c2}, {self.c3}, {self.c4}, {self.c5}")
+
+        n2 = scale_depth(2, d)
+
+        # Backbone
+        self.b0 = Conv(3, self.c1, 3, 2)  # P1/2
+        self.b1 = Conv(self.c1, self.c2, 3, 2)  # P2/4
+        self.b2 = C3k2(self.c2, self.c3, n=n2, c3k=False, e=0.25, shortcut=False)
+
+        self.b3 = Conv(self.c3, self.c3, 3, 2)  # P3/8
+        self.b4 = C3k2(self.c3, self.c4, n=n2, c3k=False, e=0.25, shortcut=False)
+
+        self.b5 = Conv(self.c4, self.c4, 3, 2)  # P4/16
+        self.b6 = C3k2(self.c4, self.c4, n=n2, c3k=True, e=0.5, shortcut=True)
+
+        self.b7 = Conv(self.c4, self.c5, 3, 2)  # P5/32
+        self.b8 = C3k2(self.c5, self.c5, n=n2, c3k=True, e=0.5, shortcut=True)
+
+        self.b9 = SPPF(self.c5, self.c5, k=5, n=3)
+        self.b10 = C2PSA(self.c5, self.c5, n=n2)
+
+        # Neck / head feature aggregation
+        self.up = nn.Upsample(scale_factor=2, mode="nearest")
+        self.cat = Concat(1)
+
+        self.h13 = C3k2(self.c5 + self.c4, self.c4, n=n2, c3k=True, e=0.5, shortcut=True)
+        self.h16 = C3k2(self.c4 + self.c4, self.c3, n=n2, c3k=True, e=0.5, shortcut=True)
+
+        self.h17 = Conv(self.c3, self.c3, 3, 2)
+        self.h19 = C3k2(self.c3 + self.c4, self.c4, n=n2, c3k=True, e=0.5, shortcut=True)
+
+        self.h20 = Conv(self.c4, self.c4, 3, 2)
+        self.h22 = C3k2(self.c4 + self.c5, self.c5, n=1, c3k=True, e=0.5, shortcut=True)
+
+        # self.detect = Detect(nc=nc, ch=(c3, c4, c5), reg_max=reg_max, end2end=end2end)
+
+        self.nc = nc
+        self.scale = scale
+        self.end2end = end2end
+        self.reg_max = reg_max
+
+    def forward(self, x: torch.Tensor):
+        # Backbone
+        x = self.b0(x)
+        x = self.b1(x)
+        x = self.b2(x)
+
+        p3 = self.b3(x)
+        p3 = self.b4(p3)
+
+        p4 = self.b5(p3)
+        p4 = self.b6(p4)
+
+        p5 = self.b7(p4)
+        p5 = self.b8(p5)
+        p5 = self.b9(p5)
+        p5 = self.b10(p5)
+
+        # PAN/FPN neck
+        n4 = self.h13(self.cat([self.up(p5), p4]))
+        n3 = self.h16(self.cat([self.up(n4), p3]))  # small
+
+        n4_out = self.h19(self.cat([self.h17(n3), n4]))  # medium
+        n5_out = self.h22(self.cat([self.h20(n4_out), p5]))  # large
+
+        return [n3, n4_out, n5_out]
 
 
 
-
-class HandGestureMultiTask(nn.Module):
+class YOLO26MultiTask(nn.Module):
     def __init__(
         self,
         yolo_weights_path: str | None = None,
@@ -526,23 +477,21 @@ class HandGestureMultiTask(nn.Module):
         # Default keeps backwards-compat: compute all heads.
         if tasks is None:
             tasks = ("det", "cls", "seg")
-        # # --- 1. Run Backbone ---
-        # b_x = self.backbone.b0(x)
-        # b_x = self.backbone.b1(b_x)
-        # b_x = self.backbone.b2(b_x)
-        # p3 = self.backbone.b4(self.backbone.b3(b_x))
-        # p4 = self.backbone.b6(self.backbone.b5(p3))
-        # p5 = self.backbone.b10(self.backbone.b9(self.backbone.b8(self.backbone.b7(p4))))
+        # --- 1. Run Backbone ---
+        b_x = self.backbone.b0(x)
+        b_x = self.backbone.b1(b_x)
+        b_x = self.backbone.b2(b_x)
+        p3 = self.backbone.b4(self.backbone.b3(b_x))
+        p4 = self.backbone.b6(self.backbone.b5(p3))
+        p5 = self.backbone.b10(self.backbone.b9(self.backbone.b8(self.backbone.b7(p4))))
 
-        # # --- 2. Run Neck ---
-        # n4 = self.backbone.h13(self.backbone.cat([self.backbone.up(p5), p4]))
-        # n3 = self.backbone.h16(self.backbone.cat([self.backbone.up(n4), p3]))
-        # n4_out = self.backbone.h19(self.backbone.cat([self.backbone.h17(n3), n4]))
-        # n5_out = self.backbone.h22(self.backbone.cat([self.backbone.h20(n4_out), p5]))
+        # --- 2. Run Neck ---
+        n4 = self.backbone.h13(self.backbone.cat([self.backbone.up(p5), p4]))
+        n3 = self.backbone.h16(self.backbone.cat([self.backbone.up(n4), p3]))
+        n4_out = self.backbone.h19(self.backbone.cat([self.backbone.h17(n3), n4]))
+        n5_out = self.backbone.h22(self.backbone.cat([self.backbone.h20(n4_out), p5]))
 
-        neck_features = self.backbone(x)
-        n3, n4, n5 = neck_features[0], neck_features[1], neck_features[2]
-        print(f"Neck features shapes: n3={n3.shape}, n4={n4.shape}, n5={n5.shape}")
+        neck_features = [n3, n4_out, n5_out]
 
         out: dict[str, torch.Tensor | object] = {}
 
@@ -552,13 +501,13 @@ class HandGestureMultiTask(nn.Module):
 
         # B. Classification Output
         if "cls" in tasks:
-            out["cls"] = self.cls_head(n5)
+            out["cls"] = self.cls_head(n5_out)
 
         # C. Segmentation Output
         if "seg" in tasks:
             target_size = n3.shape[-2:]
-            n4_up = F.interpolate(n4, size=target_size, mode="nearest")
-            n5_up = F.interpolate(n5, size=target_size, mode="nearest")
+            n4_up = F.interpolate(n4_out, size=target_size, mode="nearest")
+            n5_up = F.interpolate(n5_out, size=target_size, mode="nearest")
             fused = self.backbone.cat([n3, n4_up, n5_up])
 
             for layer in self.seg_conv:
@@ -583,40 +532,49 @@ class HandGestureMultiTask(nn.Module):
 # -----------------------------
 # Architecture summary helpers
 # -----------------------------
+
+
+def summarize_yolo26_design() -> str:
+    return (
+        "YOLO26 design summary:\n"
+        "- Detect architecture uses P3/P4/P5 pyramid outputs (strides 8/16/32).\n"
+        "- Backbone uses Conv + C3k2 stages, then SPPF and C2PSA attention refinement.\n"
+        "- Neck uses PAN/FPN-style upsample-concat and downsample-concat fusion.\n"
+        "- Head supports dual-branch predictions: one2many (training-rich) + one2one (E2E/NMS-free path).\n"
+        "- Default YOLO26 detect config sets end2end=True and reg_max=1 (DFL removed-style regression).\n"
+        "- Compound scales n/s/m/l/x adjust depth, width, and max channels."
+    )
+
+
 def _demo() -> None:
+    print(summarize_yolo26_design())
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    model = HandGestureMultiTask()
+    model = YOLO26MultiTask()
     model.to(device)
     model.eval()
 
     import torchinfo
-    torchinfo.summary(model, input_size=(1, 3, 256, 256), device=str(device), depth=7)
+    torchinfo.summary(model, input_size=(1, 3, 640, 480), device=str(device), depth=5)
 
 
-    x = torch.randn(1, 3, 256, 256, device=device)
+    x = torch.randn(1, 3, 640, 480, device=device)
     with torch.no_grad():
         preds = model(x)
 
-    det_preds = preds["det"]
-    cls_preds = preds["cls"]
-    seg_preds = preds["seg"]
-    print(f"Detection output boxes shape: {det_preds['boxes'].shape}")
-    print(f"Detection output scores shape: {det_preds['scores'].shape}")
-    print(f"Detecton output feats (neck features) lengths: {[f.shape for f in det_preds['feats']]}")
-    print(f"Classification output shape: {cls_preds.shape}")
-    print(f"Segmentation output shape: {seg_preds.shape}")
+    dection_preds_y, aux = preds["det"]
+    print(f"Detection (one2one) output shape: {dection_preds_y.shape}")
+    print(f"Classification output shape: {preds['cls'].shape}")
+    print(f"Segmentation output shape: {preds['seg'].shape}")
+    print(f"Detection (one2many) auxiliary boxes shape: {aux['one2many']['boxes'].shape}")
+    print(f"Detection (one2many) auxiliary scores shape: {aux['one2many']['scores'].shape}")
+    print(f"Detection (one2many) auxiliary features shapes: {[f.shape for f in aux['one2many']['feats']]}")
+    print(f"Detection (one2one) auxiliary boxes shape: {aux['one2one']['boxes'].shape}")
+    print(f"Detection (one2one) auxiliary scores shape: {aux['one2one']['scores'].shape}")
+    print(f"Detection (one2one) auxiliary features shapes: {[f.shape for f in aux['one2one']['feats']]}")
 
-    print("\n\n\n")
-    print("Test Cross-Attention module with dummy inputs:")
-    attn = CrossAttention(qkv_dim=[128, 64, 64], num_heads=4, attn_ratio=0.5).to(device)
-    q = torch.randn(1, 128, 16, 16, device=device)
-    k = torch.randn(1, 64, 32, 32, device=device)
-    v = torch.randn(1, 64, 32, 32, device=device)
-    attn_out = attn(q, k, v)
-    print(f"Cross-Attention output shape: {attn_out.shape}")
 
 
 
