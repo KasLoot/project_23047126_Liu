@@ -1,4 +1,4 @@
-from __future__ import annotations
+# from __future__ import annotations
 
 import argparse
 import math
@@ -10,9 +10,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 
-from dataloader import HandGestureDataset, SegAugment
+from dataloader import HandGestureDataset, SegAugment, HandGestureDataset_test, SegAugment_test
 from model import YOLO26MultiTask
 
 
@@ -247,7 +247,6 @@ def _focal_bce(
 # ---------------------------------------------------------------------------
 # Branch loss (core fix)
 # ---------------------------------------------------------------------------
-
 def _branch_loss(
     branch_out: dict[str, torch.Tensor],
     class_ids: torch.Tensor,        # (B,)
@@ -284,19 +283,20 @@ def _branch_loss(
         centers, strides = anchor_centers, anchor_strides
     assert centers.shape[0] == num_anchors
 
-    # --- FIX STARTS HERE ---
     # 1. We already have xywh, so clone it directly for anchor assignment
     gt_xywh = bboxes_xywh.clone()
 
     # 2. Convert to xyxy specifically for the clamping and later CIoU calculations
     bboxes_xyxy = _clamp_xyxy(_xywh_to_xyxy(gt_xywh), input_h, input_w)
-    # --- FIX ENDS HERE ---
 
     # ------------------------------------------------------------------
-    # Top-k positive anchor assignment (instead of single anchor)
+    # Top-k positive anchor assignment
     # ------------------------------------------------------------------
     cls_target = torch.zeros((bsz, num_classes, num_anchors), dtype=scores.dtype, device=device)
     pos_mask = torch.zeros((bsz, num_anchors), dtype=torch.bool, device=device)
+    
+    # Store the true closest anchor for each image to compute accurate metrics
+    best_anchor_indices = torch.zeros(bsz, dtype=torch.long, device=device)
 
     for bi in range(bsz):
         gt_cx, gt_cy = gt_xywh[bi, 0], gt_xywh[bi, 1]
@@ -307,12 +307,16 @@ def _branch_loss(
         stride_area = strides[:, 0] * strides[:, 1]
 
         # Normalize the distance by the stride area
-        # This makes the distance relative to the feature map's resolution!
         normalized_d2 = d2 / stride_area.clamp(min=1e-6)
+        
         # Assign top-k nearest anchors as positive
         k = min(topk, num_anchors)
         _, topk_idx = normalized_d2.topk(k, largest=False)
         pos_mask[bi, topk_idx] = True
+        
+        # Save the absolute closest anchor for metric evaluation
+        best_anchor_indices[bi] = topk_idx[0]
+
         cls_id = int(class_ids[bi].item())
         if cls_id < 0 or cls_id >= num_classes:
             raise ValueError(
@@ -322,7 +326,7 @@ def _branch_loss(
         cls_target[bi, cls_id, topk_idx] = 1.0
 
     # ------------------------------------------------------------------
-    # FIX 2: Focal loss for classification
+    # Focal loss for classification
     # ------------------------------------------------------------------
     cls_loss = _focal_bce(scores, cls_target, alpha=focal_alpha, gamma=focal_gamma)
 
@@ -360,8 +364,8 @@ def _branch_loss(
         pred_xyxy_list.append(pred_xyxy_i)
         tgt_xyxy_list.append(tgt_xyxy_i)
 
-        # Classification accuracy (use the first/best positive anchor for metric)
-        best_idx = pos_idx[0]
+        # Classification accuracy (use the TRUE closest anchor for metric)
+        best_idx = best_anchor_indices[bi]
         pred_cls_label = pred_scores_all[bi, best_idx].argmax()
         pred_cls_correct += (pred_cls_label == class_ids[bi]).float().item()
         pred_cls_total += 1
@@ -373,7 +377,7 @@ def _branch_loss(
         iou_list.append(iou_i.item())
 
     # ------------------------------------------------------------------
-    # FIX 3: CIoU loss instead of absolute-pixel smooth_l1
+    # CIoU loss instead of absolute-pixel smooth_l1
     # ------------------------------------------------------------------
     if len(pred_xyxy_list) > 0:
         all_pred = torch.cat(pred_xyxy_list, dim=0)
@@ -478,6 +482,40 @@ def compute_detection_loss(
     return loss_single, logs
 
 
+
+
+
+# ---------------------------------------------------------------------------
+# Warmup + cosine LR scheduler
+# ---------------------------------------------------------------------------
+
+class WarmupCosineScheduler:
+    """Linear warmup then cosine annealing (per-step)."""
+
+    def __init__(self, optimizer, warmup_steps: int, total_steps: int, min_lr: float = 1e-6):
+        self.optimizer = optimizer
+        self.warmup_steps = warmup_steps
+        self.total_steps = total_steps
+        self.min_lr = min_lr
+        self.base_lrs = [pg["lr"] for pg in optimizer.param_groups]
+        self._step = 0
+
+    def step(self):
+        self._step += 1
+        for pg, base_lr in zip(self.optimizer.param_groups, self.base_lrs):
+            if self._step <= self.warmup_steps:
+                lr = base_lr * self._step / max(self.warmup_steps, 1)
+            else:
+                progress = (self._step - self.warmup_steps) / max(
+                    self.total_steps - self.warmup_steps, 1
+                )
+                lr = self.min_lr + 0.5 * (base_lr - self.min_lr) * (1 + math.cos(math.pi * progress))
+            pg["lr"] = lr
+
+    def get_lr(self) -> float:
+        return self.optimizer.param_groups[0]["lr"]
+
+
 # ---------------------------------------------------------------------------
 # Training loop
 # ---------------------------------------------------------------------------
@@ -490,6 +528,7 @@ def run_epoch(
     cfg: TrainConfig,
     train: bool,
     scaler: torch.amp.GradScaler | None = None,
+    scheduler: WarmupCosineScheduler | None = None,
 ) -> dict[str, float]:
     model.train() if train else model.eval()
 
@@ -590,6 +629,9 @@ def run_epoch(
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
                     optimizer.step()
+                
+                if scheduler is not None:
+                    scheduler.step()
 
             num_batches += 1
             for k in running:
@@ -605,46 +647,15 @@ def run_epoch(
 
 
 # ---------------------------------------------------------------------------
-# Warmup + cosine LR scheduler
-# ---------------------------------------------------------------------------
-
-class WarmupCosineScheduler:
-    """Linear warmup then cosine annealing (per-step)."""
-
-    def __init__(self, optimizer, warmup_steps: int, total_steps: int, min_lr: float = 1e-6):
-        self.optimizer = optimizer
-        self.warmup_steps = warmup_steps
-        self.total_steps = total_steps
-        self.min_lr = min_lr
-        self.base_lrs = [pg["lr"] for pg in optimizer.param_groups]
-        self._step = 0
-
-    def step(self):
-        self._step += 1
-        for pg, base_lr in zip(self.optimizer.param_groups, self.base_lrs):
-            if self._step <= self.warmup_steps:
-                lr = base_lr * self._step / max(self.warmup_steps, 1)
-            else:
-                progress = (self._step - self.warmup_steps) / max(
-                    self.total_steps - self.warmup_steps, 1
-                )
-                lr = self.min_lr + 0.5 * (base_lr - self.min_lr) * (1 + math.cos(math.pi * progress))
-            pg["lr"] = lr
-
-    def get_lr(self) -> float:
-        return self.optimizer.param_groups[0]["lr"]
-
-
-# ---------------------------------------------------------------------------
 # Dataloaders
 # ---------------------------------------------------------------------------
 
 def build_dataloaders(cfg: TrainConfig) -> tuple[DataLoader, DataLoader]:
     # FIX 5: Enable augmentation for the training set
     # NOTE: SegAugment expects out_size=(H, W). Your saved tensors are (H=480, W=640).
-    train_aug = SegAugment(out_size=cfg.input_size)
-    train_dataset = HandGestureDataset(root_dir=cfg.train_dataset_path, transform=train_aug)
-    val_dataset = HandGestureDataset(root_dir=cfg.val_dataset_path, transform=None)
+    train_aug = SegAugment_test(out_size=cfg.input_size)
+    train_dataset = HandGestureDataset_test(root_dir=cfg.train_dataset_path, transform=train_aug)
+    val_dataset = HandGestureDataset_test(root_dir=cfg.val_dataset_path, transform=None)
 
     train_loader = DataLoader(
         train_dataset, batch_size=cfg.batch_size, shuffle=True,
@@ -677,7 +688,27 @@ def train(cfg: TrainConfig) -> None:
     _init_weights(model)
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    # Optimizer with decoupled weight decay: apply decay to conv and linear weights, but not to biases or batchnorm parameters.
+    g_decay, g_no_decay = [], []
+    for m in model.modules():
+        if isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+            g_no_decay.append(m.weight)
+            if m.bias is not None:
+                g_no_decay.append(m.bias)
+        elif isinstance(m, (nn.Conv2d, nn.Linear)):
+            g_decay.append(m.weight)
+            if m.bias is not None:
+                g_no_decay.append(m.bias)
+
+    optimizer = torch.optim.AdamW(
+        [
+            {"params": g_decay, "weight_decay": cfg.weight_decay},
+            {"params": g_no_decay, "weight_decay": 0.0},
+        ],
+        lr=cfg.lr,
+    )
+
+
     total_steps = cfg.epochs * len(train_loader)
     warmup_steps = cfg.warmup_epochs * len(train_loader)
     scheduler = WarmupCosineScheduler(optimizer, warmup_steps, total_steps)
@@ -688,11 +719,11 @@ def train(cfg: TrainConfig) -> None:
     best_val_loss = float("inf")
 
     for epoch in range(1, cfg.epochs + 1):
-        train_logs = run_epoch(model, train_loader, optimizer, device, cfg, train=True, scaler=scaler)
+        train_logs = run_epoch(model, train_loader, optimizer, device, cfg, train=True, scaler=scaler, scheduler=scheduler)
 
-        # Step the scheduler once per epoch (for simplicity — you could also do per-step)
-        for _ in range(len(train_loader)):
-            scheduler.step()
+        # # Step the scheduler once per epoch (for simplicity — you could also do per-step)
+        # for _ in range(len(train_loader)):
+        #     scheduler.step()
 
         if len(val_loader) > 0:
             val_logs = run_epoch(model, val_loader, optimizer, device, cfg, train=False, scaler=scaler)
@@ -737,6 +768,7 @@ def train(cfg: TrainConfig) -> None:
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(last_ckpt, os.path.join(cfg.output_dir, "best.pt"))
+            print(f"New best model saved with val_loss={best_val_loss:.6f}")
 
     print(f"Training complete. Best validation loss: {best_val_loss:.6f}")
 
@@ -785,7 +817,7 @@ def _init_weights(model: nn.Module) -> None:
 
 def parse_args() -> TrainConfig:
     parser = argparse.ArgumentParser(description="Train YOLO26 from-scratch on HandGestureDataset")
-    parser.add_argument("--output-dir", type=str, default="outputs/stage_1/train_1")
+    parser.add_argument("--output-dir", type=str, default="outputs/stage_1/train_2")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=4)

@@ -410,10 +410,10 @@ class YOLO26MultiTask(nn.Module):
         # 1. Load the base YOLO26 model
         self.backbone = BackBone(nc=num_classes, scale=scale, end2end=end2end, reg_max=reg_max)
         
-        if yolo_weights_path:
-            ckpt = torch.load(yolo_weights_path, map_location="cpu")
-            self.backbone.load_state_dict(ckpt["model"])
-            print(f"Loaded pretrained YOLO26 weights from {yolo_weights_path}")
+        # if yolo_weights_path:
+        #     ckpt = torch.load(yolo_weights_path, map_location="cpu")
+        #     self.load_state_dict(ckpt)
+        #     print(f"Loaded pretrained YOLO26 weights from {yolo_weights_path}")
 
         detec_ch = (self.backbone.c3, self.backbone.c4, self.backbone.c5)
         self.detect = Detect(nc=num_classes, ch=detec_ch, reg_max=reg_max, end2end=end2end)
