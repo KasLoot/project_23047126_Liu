@@ -675,7 +675,7 @@ def _init_weights(model: nn.Module) -> None:
 
 def parse_args() -> TrainConfig:
     parser = argparse.ArgumentParser(description="Train YOLO26 from-scratch on HandGestureDataset")
-    parser.add_argument("--output-dir", type=str, default="output/stage_1/train_1")
+    parser.add_argument("--output-dir", type=str, default="outputs/stage_1/train_1")
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=0)
