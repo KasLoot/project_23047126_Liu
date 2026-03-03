@@ -12,17 +12,27 @@ import math
 class SegAugment:
     """Geometric + appearance augmentations applied identically to image, mask & bounding box."""
 
-    def __init__(self, out_size=(640, 480)):
+    def __init__(self, out_size=(480, 640)):
         self.out_size = out_size
 
     def __call__(self, image, mask, bbox):
-        # bbox is expected to be [cx, cy, w, h] as a 1D tensor
-        _, w, h = image.shape
+        # bbox is expected to be (1, 4) or (4,) in absolute pixel coords: [cx, cy, w, h]
+        if image.ndim != 3:
+            raise ValueError(f"Expected image of shape (C,H,W), got {tuple(image.shape)}")
+        _, h, w = image.shape
 
-        bbox = bbox[0]
+        if isinstance(bbox, torch.Tensor):
+            if bbox.ndim == 2 and bbox.shape[0] == 1 and bbox.shape[1] == 4:
+                bbox_1d = bbox[0]
+            elif bbox.ndim == 1 and bbox.shape[0] == 4:
+                bbox_1d = bbox
+            else:
+                raise ValueError(f"Expected bbox of shape (1,4) or (4,), got {tuple(bbox.shape)}")
+        else:
+            bbox_1d = torch.tensor(bbox, dtype=torch.float32)
         
         # 1. Convert cx, cy, w, h to corners to track them safely
-        cx, cy, bw, bh = bbox[0], bbox[1], bbox[2], bbox[3]
+        cx, cy, bw, bh = bbox_1d[0], bbox_1d[1], bbox_1d[2], bbox_1d[3]
         x1 = cx - bw / 2.0
         y1 = cy - bh / 2.0
         x2 = cx + bw / 2.0
@@ -63,18 +73,19 @@ class SegAugment:
                 # Shift back
                 new_corners.append((rx + icx, ry + icy))
                 
-            xs = [c[0] for c in new_corners]
-            ys = [c[1] for c in new_corners]
-            x1, x2 = min(xs), max(xs)
-            y1, y2 = min(ys), max(ys)
+            xs = torch.stack([c[0] for c in new_corners])
+            ys = torch.stack([c[1] for c in new_corners])
+            x1, x2 = xs.min(), xs.max()
+            y1, y2 = ys.min(), ys.max()
 
         # Scale/Resize
-        target_w, target_h = self.out_size[0], self.out_size[1]
-        scale_x = target_w / w
-        scale_y = target_h / h
+        target_h, target_w = int(self.out_size[0]), int(self.out_size[1])
+        scale_x = float(target_w) / float(w)
+        scale_y = float(target_h) / float(h)
         
-        image = F.resize(image, (target_w, target_h), interpolation=InterpolationMode.BILINEAR)
-        mask = F.resize(mask, (target_w, target_h), interpolation=InterpolationMode.NEAREST)
+        # torchvision expects size=(H, W)
+        image = F.resize(image, (target_h, target_w), interpolation=InterpolationMode.BILINEAR)
+        mask = F.resize(mask, (target_h, target_w), interpolation=InterpolationMode.NEAREST)
         
         x1 *= scale_x
         x2 *= scale_x
@@ -82,10 +93,10 @@ class SegAugment:
         y2 *= scale_y
 
         # Clamp the box strictly to the new image boundaries
-        x1 = max(0.0, min(x1, target_w - 1.0))
-        x2 = max(0.0, min(x2, target_w - 1.0))
-        y1 = max(0.0, min(y1, target_h - 1.0))
-        y2 = max(0.0, min(y2, target_h - 1.0))
+        x1 = torch.clamp(x1, 0.0, float(target_w - 1))
+        x2 = torch.clamp(x2, 0.0, float(target_w - 1))
+        y1 = torch.clamp(y1, 0.0, float(target_h - 1))
+        y2 = torch.clamp(y2, 0.0, float(target_h - 1))
 
         # Convert back to cx, cy, w, h
         new_cx = (x1 + x2) / 2.0
@@ -93,7 +104,7 @@ class SegAugment:
         new_bw = x2 - x1
         new_bh = y2 - y1
         
-        bbox = torch.tensor([new_cx, new_cy, new_bw, new_bh], dtype=bbox.dtype, device=bbox.device)
+        bbox_out = torch.stack([new_cx, new_cy, new_bw, new_bh]).to(dtype=bbox_1d.dtype, device=bbox_1d.device)
 
         # --- Appearance Transforms (Image Only) ---
         if random.random() < 0.5:
@@ -105,7 +116,8 @@ class SegAugment:
         if random.random() < 0.3:
             image = F.adjust_hue(image, hue_factor=random.uniform(-0.05, 0.05))
 
-        return image, mask, bbox
+        # Keep dataset's expected bbox shape (1, 4)
+        return image, mask, bbox_out.unsqueeze(0)
 
 
 class HandGestureDataset(Dataset):
@@ -124,8 +136,17 @@ class HandGestureDataset(Dataset):
         image_info = self.image_info[idx]
         image_tensor_path = os.path.join(self.image_tensor_dir, image_info["new_image_name"].replace(".png", ".pt"))
         mask_tensor_path = os.path.join(self.mask_tensor_dir, image_info["new_mask_name"].replace(".png", ".pt"))
-        image_tensor = torch.load(image_tensor_path)
-        mask_tensor = torch.load(mask_tensor_path)
+        image_tensor = torch.load(image_tensor_path).float()
+        mask_tensor = torch.load(mask_tensor_path).float()
+
+        # Defensive normalization in case any tensors were saved as 0..255.
+        if image_tensor.numel() > 0 and image_tensor.max() > 1.5:
+            image_tensor = image_tensor / 255.0
+        if mask_tensor.numel() > 0 and mask_tensor.max() > 1.5:
+            mask_tensor = mask_tensor / 255.0
+
+        # Ensure mask is binary (dataset is a hand/no-hand mask).
+        mask_tensor = (mask_tensor > 0.5).float()
         class_id = torch.tensor([image_info["class_id"]])
         bbox = torch.tensor([image_info["bbox"]], dtype=torch.float32)
         if self.transform:

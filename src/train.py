@@ -8,11 +8,33 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 
 from dataloader import HandGestureDataset, SegAugment
 from model import YOLO26MultiTask
+
+
+# ---------------------------------------------------------------------------
+# Anchor cache (performance)
+# ---------------------------------------------------------------------------
+
+_ANCHOR_CACHE: dict[tuple, tuple[torch.Tensor, torch.Tensor]] = {}
+
+
+def _get_cached_anchor_meta(
+    feats: list[torch.Tensor], input_h: int, input_w: int, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
+    shapes = tuple((int(f.shape[-2]), int(f.shape[-1])) for f in feats)
+    dev_key = (device.type, device.index)
+    key = (dev_key, int(input_h), int(input_w), shapes)
+    cached = _ANCHOR_CACHE.get(key)
+    if cached is not None:
+        return cached
+    centers, strides = _build_anchor_meta(feats, input_h, input_w, device)
+    _ANCHOR_CACHE[key] = (centers, strides)
+    return centers, strides
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +68,15 @@ class TrainConfig:
     # Focal loss parameters
     focal_alpha: float = 0.25
     focal_gamma: float = 2.0
+
+    # Input size in (H, W). Your saved tensors are (3, 480, 640).
+    input_size: tuple[int, int] = (480, 640)
+
+    # Optional multi-task losses (disabled by default).
+    cls_head_weight: float = 0.0
+    seg_head_weight: float = 0.0
+    seg_bce_weight: float = 1.0
+    seg_dice_weight: float = 1.0
 
 
 def set_seed(seed: int) -> None:
@@ -229,6 +260,8 @@ def _branch_loss(
     topk: int = 13,
     focal_alpha: float = 0.25,
     focal_gamma: float = 2.0,
+    anchor_centers: torch.Tensor | None = None,
+    anchor_strides: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     boxes = branch_out["boxes"]   # (B, 4, A)
     scores = branch_out["scores"] # (B, C, A)
@@ -245,7 +278,10 @@ def _branch_loss(
     bsz, _, num_anchors = boxes.shape
     device = boxes.device
 
-    centers, strides = _build_anchor_meta(feats, input_h, input_w, device)
+    if anchor_centers is None or anchor_strides is None:
+        centers, strides = _get_cached_anchor_meta(feats, input_h, input_w, device)
+    else:
+        centers, strides = anchor_centers, anchor_strides
     assert centers.shape[0] == num_anchors
 
     # --- FIX STARTS HERE ---
@@ -382,12 +418,17 @@ def compute_detection_loss(
         raise TypeError(f"Unexpected model output type: {type(model_out)}")
 
     if "one2many" in model_out and "one2one" in model_out:
+        # Feature shapes are identical between branches; build anchors once.
+        feats = model_out["one2many"]["feats"]
+        centers, strides = _get_cached_anchor_meta(feats, input_h, input_w, bboxes_xywh.device)
         loss_many, logs_many = _branch_loss(
             model_out["one2many"], class_ids, bboxes_xywh,
             input_h, input_w, cfg.num_classes,
             cfg.cls_loss_weight, cfg.box_loss_weight,
             topk=cfg.topk_many,
             focal_alpha=cfg.focal_alpha, focal_gamma=cfg.focal_gamma,
+            anchor_centers=centers,
+            anchor_strides=strides,
         )
         loss_one, logs_one = _branch_loss(
             model_out["one2one"], class_ids, bboxes_xywh,
@@ -395,6 +436,8 @@ def compute_detection_loss(
             cfg.cls_loss_weight, cfg.box_loss_weight,
             topk=cfg.topk_one,
             focal_alpha=cfg.focal_alpha, focal_gamma=cfg.focal_gamma,
+            anchor_centers=centers,
+            anchor_strides=strides,
         )
         total = loss_many + cfg.one2one_loss_weight * loss_one
         logs = {
@@ -473,21 +516,68 @@ def run_epoch(
 
             if use_amp:
                 with torch.amp.autocast("cuda"):
-                    outputs = model(images)
+                    tasks = ("det",) if (cfg.cls_head_weight == 0.0 and cfg.seg_head_weight == 0.0) else ("det", "cls", "seg")
+                    outputs = model(images, tasks=tasks)
                     detection_preds = outputs.get("det", None)
                     loss, logs = compute_detection_loss(
                         detection_preds, class_ids, bboxes,
                         input_h=images.shape[-2], input_w=images.shape[-1],
                         cfg=cfg,
                     )
+
+                    # Optional heads
+                    if cfg.cls_head_weight != 0.0 and "cls" in outputs:
+                        cls_loss = F.cross_entropy(outputs["cls"], class_ids)
+                        loss = loss + cfg.cls_head_weight * cls_loss
+                        logs["cls_head_loss"] = float(cls_loss.detach().item())
+
+                    if cfg.seg_head_weight != 0.0 and "seg" in outputs:
+                        masks = _masks.to(device).float()
+                        # Ensure shape (B, 1, H, W)
+                        if masks.ndim == 3:
+                            masks = masks.unsqueeze(1)
+                        seg_logits = outputs["seg"]
+                        bce = F.binary_cross_entropy_with_logits(seg_logits, masks)
+                        probs = seg_logits.sigmoid()
+                        # Soft dice (batch-mean)
+                        eps = 1e-6
+                        num = 2 * (probs * masks).sum(dim=(1, 2, 3))
+                        den = (probs + masks).sum(dim=(1, 2, 3)).clamp(min=eps)
+                        dice = 1.0 - (num / den)
+                        dice = dice.mean()
+                        seg_loss = cfg.seg_bce_weight * bce + cfg.seg_dice_weight * dice
+                        loss = loss + cfg.seg_head_weight * seg_loss
+                        logs["seg_head_loss"] = float(seg_loss.detach().item())
             else:
-                outputs = model(images)
+                tasks = ("det",) if (cfg.cls_head_weight == 0.0 and cfg.seg_head_weight == 0.0) else ("det", "cls", "seg")
+                outputs = model(images, tasks=tasks)
                 detection_preds = outputs.get("det", None)
                 loss, logs = compute_detection_loss(
                     detection_preds, class_ids, bboxes,
                     input_h=images.shape[-2], input_w=images.shape[-1],
                     cfg=cfg,
                 )
+
+                if cfg.cls_head_weight != 0.0 and "cls" in outputs:
+                    cls_loss = F.cross_entropy(outputs["cls"], class_ids)
+                    loss = loss + cfg.cls_head_weight * cls_loss
+                    logs["cls_head_loss"] = float(cls_loss.detach().item())
+
+                if cfg.seg_head_weight != 0.0 and "seg" in outputs:
+                    masks = _masks.to(device).float()
+                    if masks.ndim == 3:
+                        masks = masks.unsqueeze(1)
+                    seg_logits = outputs["seg"]
+                    bce = F.binary_cross_entropy_with_logits(seg_logits, masks)
+                    probs = seg_logits.sigmoid()
+                    eps = 1e-6
+                    num = 2 * (probs * masks).sum(dim=(1, 2, 3))
+                    den = (probs + masks).sum(dim=(1, 2, 3)).clamp(min=eps)
+                    dice = 1.0 - (num / den)
+                    dice = dice.mean()
+                    seg_loss = cfg.seg_bce_weight * bce + cfg.seg_dice_weight * dice
+                    loss = loss + cfg.seg_head_weight * seg_loss
+                    logs["seg_head_loss"] = float(seg_loss.detach().item())
 
             if train:
                 if use_amp:
@@ -551,7 +641,8 @@ class WarmupCosineScheduler:
 
 def build_dataloaders(cfg: TrainConfig) -> tuple[DataLoader, DataLoader]:
     # FIX 5: Enable augmentation for the training set
-    train_aug = SegAugment(out_size=(640, 480))
+    # NOTE: SegAugment expects out_size=(H, W). Your saved tensors are (H=480, W=640).
+    train_aug = SegAugment(out_size=cfg.input_size)
     train_dataset = HandGestureDataset(root_dir=cfg.train_dataset_path, transform=train_aug)
     val_dataset = HandGestureDataset(root_dir=cfg.val_dataset_path, transform=None)
 
@@ -580,7 +671,7 @@ def train(cfg: TrainConfig) -> None:
     train_loader, val_loader = build_dataloaders(cfg)
     print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
 
-    model = YOLO26MultiTask().to(device)
+    model = YOLO26MultiTask(num_classes=cfg.num_classes, end2end=cfg.end2end, scale=cfg.scale, reg_max=cfg.reg_max).to(device)
 
     # FIX 4: Proper weight initialisation
     _init_weights(model)
@@ -666,15 +757,26 @@ def _init_weights(model: nn.Module) -> None:
     # sigmoid output is ~(1/num_classes)*prior, preventing early explosion.
     prior = 0.01
     if hasattr(model, "detect"):
-        for cv3 in [model.detect.cv3]:
-            for seq in cv3:
-                # last layer is nn.Conv2d
-                if hasattr(seq[-1], "bias") and seq[-1].bias is not None:
-                    nn.init.constant_(seq[-1].bias, -math.log((1 - prior) / prior))
-        if hasattr(model.detect, "one2one_cv3"):
-            for seq in model.detect.one2one_cv3:
-                if hasattr(seq[-1], "bias") and seq[-1].bias is not None:
-                    nn.init.constant_(seq[-1].bias, -math.log((1 - prior) / prior))
+        # IMPORTANT: For stability with focal loss on dense anchors, zero-init the
+        # final conv weights so outputs start near the bias prior.
+        def _init_detect_branch(cv2_list: nn.ModuleList, cv3_list: nn.ModuleList) -> None:
+            for seq in cv2_list:
+                last = seq[-1]
+                if isinstance(last, nn.Conv2d):
+                    nn.init.zeros_(last.weight)
+                    if last.bias is not None:
+                        nn.init.zeros_(last.bias)
+
+            for seq in cv3_list:
+                last = seq[-1]
+                if isinstance(last, nn.Conv2d):
+                    nn.init.zeros_(last.weight)
+                    if last.bias is not None:
+                        nn.init.constant_(last.bias, -math.log((1 - prior) / prior))
+
+        _init_detect_branch(model.detect.cv2, model.detect.cv3)
+        if hasattr(model.detect, "one2one_cv2") and hasattr(model.detect, "one2one_cv3"):
+            _init_detect_branch(model.detect.one2one_cv2, model.detect.one2one_cv3)
 
 
 # ---------------------------------------------------------------------------
@@ -686,7 +788,7 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--output-dir", type=str, default="outputs/stage_1/train_1")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--weight-decay", type=float, default=1e-2)
     parser.add_argument("--val-split", type=float, default=0.1)
@@ -704,6 +806,16 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--warmup-epochs", type=int, default=5)
     parser.add_argument("--focal-alpha", type=float, default=0.25)
     parser.add_argument("--focal-gamma", type=float, default=2.0)
+
+    # Input sizing (H, W)
+    parser.add_argument("--input-h", type=int, default=480)
+    parser.add_argument("--input-w", type=int, default=640)
+
+    # Optional multi-task losses
+    parser.add_argument("--cls-head-weight", type=float, default=0.0)
+    parser.add_argument("--seg-head-weight", type=float, default=0.0)
+    parser.add_argument("--seg-bce-weight", type=float, default=1.0)
+    parser.add_argument("--seg-dice-weight", type=float, default=1.0)
 
     args = parser.parse_args()
     return TrainConfig(
@@ -727,10 +839,15 @@ def parse_args() -> TrainConfig:
         warmup_epochs=args.warmup_epochs,
         focal_alpha=args.focal_alpha,
         focal_gamma=args.focal_gamma,
+
+        input_size=(args.input_h, args.input_w),
+        cls_head_weight=args.cls_head_weight,
+        seg_head_weight=args.seg_head_weight,
+        seg_bce_weight=args.seg_bce_weight,
+        seg_dice_weight=args.seg_dice_weight,
     )
 
 
 if __name__ == "__main__":
-    import torch.nn as nn
     cfg = parse_args()
     train(cfg)

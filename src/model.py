@@ -397,11 +397,18 @@ class BackBone(nn.Module):
 
 
 class YOLO26MultiTask(nn.Module):
-    def __init__(self, yolo_weights_path=None, num_classes=10, end2end=True):
+    def __init__(
+        self,
+        yolo_weights_path: str | None = None,
+        num_classes: int = 10,
+        end2end: bool = True,
+        scale: Literal["n", "s", "m", "l", "x"] = "n",
+        reg_max: int = 1,
+    ):
         super().__init__()
         
-        # 1. Load the base YOLO26 model (Scale "n" based on your config)
-        self.backbone = BackBone(nc=num_classes, scale="n", end2end=end2end)
+        # 1. Load the base YOLO26 model
+        self.backbone = BackBone(nc=num_classes, scale=scale, end2end=end2end, reg_max=reg_max)
         
         if yolo_weights_path:
             ckpt = torch.load(yolo_weights_path, map_location="cpu")
@@ -409,7 +416,7 @@ class YOLO26MultiTask(nn.Module):
             print(f"Loaded pretrained YOLO26 weights from {yolo_weights_path}")
 
         detec_ch = (self.backbone.c3, self.backbone.c4, self.backbone.c5)
-        self.detect = Detect(nc=num_classes, ch=detec_ch, reg_max=1, end2end=end2end)
+        self.detect = Detect(nc=num_classes, ch=detec_ch, reg_max=reg_max, end2end=end2end)
 
         # 2. Extract channel sizes dynamically from the pre-built Detect head
         # This ensures it always matches your backbone scale (n, s, m, l, x)
@@ -470,7 +477,10 @@ class YOLO26MultiTask(nn.Module):
             param.requires_grad = False
         print("Backbone frozen.")
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor, tasks: tuple[str, ...] | None = None):
+        # Default keeps backwards-compat: compute all heads.
+        if tasks is None:
+            tasks = ("det", "cls", "seg")
         # --- 1. Run Backbone ---
         b_x = self.backbone.b0(x)
         b_x = self.backbone.b1(b_x)
@@ -487,38 +497,32 @@ class YOLO26MultiTask(nn.Module):
 
         neck_features = [n3, n4_out, n5_out]
 
-        # --- 3. Output Branches ---
-        
-        # A. Detection Output (Uses your heavily-trained, frozen detection head)
-        det_out = self.detect(neck_features)
+        out: dict[str, torch.Tensor | object] = {}
 
-        # B. Classification Output (Attached to the deepest semantic layer)
-        cls_out = self.cls_head(n5_out)
+        # A. Detection Output
+        if "det" in tasks:
+            out["det"] = self.detect(neck_features)
 
-        # C. Segmentation Output (Fuses all three layers for spatial accuracy)
-        target_size = n3.shape[-2:]
-        n4_up = F.interpolate(n4_out, size=target_size, mode="nearest")
-        n5_up = F.interpolate(n5_out, size=target_size, mode="nearest")
-        
-        fused = self.backbone.cat([n3, n4_up, n5_up])
-        # mask_low_res = self.seg_conv(fused)
+        # B. Classification Output
+        if "cls" in tasks:
+            out["cls"] = self.cls_head(n5_out)
 
-        for layer in self.seg_conv:
-            if isinstance(layer, Conv) or isinstance(layer, nn.Conv2d):
-                fused = layer(fused)
-            if isinstance(layer, Attention):
-                fused = layer(fused) + fused
-        mask_low_res = fused
-            
-        
-        # Upsample mask to match the original image resolution
-        seg_out = F.interpolate(mask_low_res, size=x.shape[-2:], mode="bilinear", align_corners=False)
+        # C. Segmentation Output
+        if "seg" in tasks:
+            target_size = n3.shape[-2:]
+            n4_up = F.interpolate(n4_out, size=target_size, mode="nearest")
+            n5_up = F.interpolate(n5_out, size=target_size, mode="nearest")
+            fused = self.backbone.cat([n3, n4_up, n5_up])
 
-        return {
-            "det": det_out,
-            "cls": cls_out,
-            "seg": seg_out
-        }
+            for layer in self.seg_conv:
+                if isinstance(layer, Conv) or isinstance(layer, nn.Conv2d):
+                    fused = layer(fused)
+                if isinstance(layer, Attention):
+                    fused = layer(fused) + fused
+            mask_low_res = fused
+            out["seg"] = F.interpolate(mask_low_res, size=x.shape[-2:], mode="bilinear", align_corners=False)
+
+        return out
 
 
 

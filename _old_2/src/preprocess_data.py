@@ -79,7 +79,7 @@ def gether_images_and_masks(dataset_path, output_dir):
                             class_name = mask_dir.split("/")[-3].split("_")[1]
                             class_id = int(mask_dir.split("/")[-3].split("_")[0][1:]) - 1
                             
-                            bbox = mask_to_bbox(np.array(Image.open(mask_path).convert("L")).transpose((1, 0))) # (H, W) -> (W, H)
+                            bbox = mask_to_bbox(np.array(Image.open(mask_path).convert("L")))
 
                             image_info = {
                                 "name_index": image_name_index,
@@ -113,8 +113,8 @@ def image_to_tensor(dataset_path):
         if file.endswith(".png"):
             image_path = os.path.join(images_dir, file)
             mask_path = os.path.join(masks_dir, file)
-            image_tensor = F.to_tensor(Image.open(image_path).convert("RGB")).permute(0, 2, 1) # (C, H, W) -> (C, W, H)
-            mask_tensor = F.to_tensor(Image.open(mask_path).convert("L")).permute(0, 2, 1) # (1, H, W) -> (1, W, H)
+            image_tensor = F.to_tensor(Image.open(image_path).convert("RGB"))
+            mask_tensor = F.to_tensor(Image.open(mask_path).convert("L"))
             torch.save(image_tensor, os.path.join(dataset_path, "image_tensors", file.replace(".png", ".pt")))
             torch.save(mask_tensor, os.path.join(dataset_path, "mask_tensors", file.replace(".png", ".pt")))
 

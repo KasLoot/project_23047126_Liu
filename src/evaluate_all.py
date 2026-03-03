@@ -76,15 +76,27 @@ def run_folder_inference(
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Loading MultiTask weights from {weights_path}...")
-    
-    # 1. Initialize MultiTask Model
-    num_classes = 10
-    model = YOLO26MultiTask().to(device)
-    
-    # Load checkpoint
+
+    # Load checkpoint first so we can mirror the training config.
     ckpt = torch.load(weights_path, map_location=device)
+
+    train_cfg = ckpt.get("cfg", {}) if isinstance(ckpt, dict) else {}
+    num_classes = int(train_cfg.get("num_classes", 10))
+    scale = train_cfg.get("scale", "n")
+    end2end = bool(train_cfg.get("end2end", True))
+    reg_max = int(train_cfg.get("reg_max", 1))
+    input_size = train_cfg.get("input_size", (480, 640))  # (H, W)
+
+    # 1. Initialize MultiTask Model (must match checkpoint architecture)
+    model = YOLO26MultiTask(
+        num_classes=num_classes,
+        end2end=end2end,
+        scale=scale,
+        reg_max=reg_max,
+    ).to(device)
+
     # Handle both direct state_dict and nested 'model' dict saving formats
-    state_dict = ckpt["model"] if "model" in ckpt else ckpt
+    state_dict = ckpt["model"] if (isinstance(ckpt, dict) and "model" in ckpt) else ckpt
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -111,7 +123,9 @@ def run_folder_inference(
 
     for img_path in selected_images:
         original_img = Image.open(img_path).convert("RGB")
-        img_resized = original_img.resize((640, 480), Image.Resampling.BILINEAR)
+        # input_size is (H, W) -> PIL expects (W, H)
+        in_h, in_w = int(input_size[0]), int(input_size[1])
+        img_resized = original_img.resize((in_w, in_h), Image.Resampling.BILINEAR)
         img_tensor = TF.to_tensor(img_resized).unsqueeze(0).to(device)
         
         with torch.no_grad():
@@ -147,8 +161,9 @@ def run_folder_inference(
             decoded_xywh = torch.cat([pred_xy, pred_wh], dim=-1)
             decoded_xyxy = _xywh_to_xyxy(decoded_xywh)
             
-            # Apply Logit Shift for cleaner thresholds
-            logit_shift = 2.0 
+            # Logit shift can make thresholds look nicer, but it also changes calibration.
+            # Keep default at 0.0 unless you intentionally want to bias towards more detections.
+            logit_shift = 1.0
             scores = (scores_raw + logit_shift).sigmoid().permute(0, 2, 1)[0]
             max_scores, class_preds = scores.max(dim=-1)
             
@@ -169,7 +184,8 @@ def run_folder_inference(
         
         # 1. Add Segmentation Overlay (Cyan, semi-transparent)
         img_rgba = img_resized.convert("RGBA")
-        mask_rgba = np.zeros((480, 640, 4), dtype=np.uint8)
+        mh, mw = mask.shape
+        mask_rgba = np.zeros((mh, mw, 4), dtype=np.uint8)
         mask_rgba[mask > 0] = [0, 255, 255, 120] # R, G, B, Alpha
         mask_pil = Image.fromarray(mask_rgba, mode="RGBA")
         
