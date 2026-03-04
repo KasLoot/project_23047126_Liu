@@ -451,7 +451,7 @@ class HandGestureMultiTask(nn.Module):
         yolo_weights_path: str | None = None,
         num_classes: int = 10,
         end2end: bool = True,
-        scale: Literal["n", "s", "m", "l", "x"] = "n",
+        scale: Literal["n", "s", "m", "l", "x"] = "m",
         reg_max: int = 1,
     ):
         super().__init__()
@@ -542,7 +542,6 @@ class HandGestureMultiTask(nn.Module):
 
         neck_features = self.backbone(x)
         n3, n4, n5 = neck_features[0], neck_features[1], neck_features[2]
-        print(f"Neck features shapes: n3={n3.shape}, n4={n4.shape}, n5={n5.shape}")
 
         out: dict[str, torch.Tensor | object] = {}
 

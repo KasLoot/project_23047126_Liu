@@ -45,7 +45,7 @@ def _get_cached_anchor_meta(
 class TrainConfig:
     train_dataset_path: str = "dataset/dataset_v1/train"
     val_dataset_path: str = "dataset/dataset_v1/val"
-    output_dir: str = "outputs/stage_1/train_1"
+    output_dir: str = "outputs/stage_1/train_x"
     epochs: int = 80
     batch_size: int = 16
     num_workers: int = 0
@@ -70,7 +70,7 @@ class TrainConfig:
     focal_gamma: float = 2.0
 
     # Input size in (H, W). Your saved tensors are (3, 480, 640).
-    input_size: tuple[int, int] = (480, 640)
+    resize_shape: tuple[int, int] = (256, 256)
 
     # Optional multi-task losses (disabled by default).
     cls_head_weight: float = 0.0
@@ -549,6 +549,7 @@ def run_epoch(
             images = images.to(device)
             class_ids = class_ids.to(device)
             bboxes = bboxes.to(device)
+            # print(f"images.shape={images.shape}, class_ids.shape={class_ids.shape}, bboxes.shape={bboxes.shape}")
 
             if train:
                 optimizer.zero_grad(set_to_none=True)
@@ -653,9 +654,9 @@ def run_epoch(
 def build_dataloaders(cfg: TrainConfig) -> tuple[DataLoader, DataLoader]:
     # FIX 5: Enable augmentation for the training set
     # NOTE: SegAugment expects out_size=(H, W). Your saved tensors are (H=480, W=640).
-    train_aug = SegAugment_v2(out_size=cfg.input_size)
-    train_dataset = HandGestureDataset_v2(root_dir=cfg.train_dataset_path, transform=train_aug)
-    val_dataset = HandGestureDataset_v2(root_dir=cfg.val_dataset_path, transform=None, resize_shape=[256, 256])
+    train_aug = SegAugment_v2(out_size=cfg.resize_shape)
+    train_dataset = HandGestureDataset_v2(root_dir=cfg.train_dataset_path, transform=train_aug, resize_shape=cfg.resize_shape)
+    val_dataset = HandGestureDataset_v2(root_dir=cfg.val_dataset_path, transform=None, resize_shape=cfg.resize_shape)
 
     train_loader = DataLoader(
         train_dataset, batch_size=cfg.batch_size, shuffle=True,
@@ -735,7 +736,7 @@ def train(cfg: TrainConfig) -> None:
         lr = scheduler.get_lr()
         if val_logs is not None:
             print(
-                f"Epoch {epoch:03d}/{cfg.epochs} | "
+                f"Epoch {epoch}/{cfg.epochs} | "
                 f"lr={lr:.3e} | "
                 f"train_loss={train_logs['loss']:.4f} | "
                 f"val_loss={val_logs['loss']:.4f} | "
@@ -748,7 +749,7 @@ def train(cfg: TrainConfig) -> None:
             )
         else:
             print(
-                f"Epoch {epoch:03d}/{cfg.epochs} | "
+                f"Epoch {epoch}/{cfg.epochs} | "
                 f"lr={lr:.3e} | "
                 f"train_loss={train_logs['loss']:.4f} | "
                 f"train_acc={train_logs['acc']:.4f} | "
@@ -768,7 +769,7 @@ def train(cfg: TrainConfig) -> None:
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(last_ckpt, os.path.join(cfg.output_dir, "best.pt"))
-            print(f"New best model saved with val_loss={best_val_loss:.6f}")
+            print(f"New best model saved to {os.path.join(cfg.output_dir, 'best.pt')} with val_loss={best_val_loss:.6f}")
 
     print(f"Training complete. Best validation loss: {best_val_loss:.6f}")
 
@@ -826,7 +827,7 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--val-split", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-classes", type=int, default=10)
-    parser.add_argument("--scale", type=str, default="n", choices=["n", "s", "m", "l", "x"])
+    parser.add_argument("--scale", type=str, default="m", choices=["n", "s", "m", "l", "x"])
     parser.add_argument("--end2end", action="store_true", default=True)
     parser.add_argument("--no-end2end", action="store_false", dest="end2end")
     parser.add_argument("--reg-max", type=int, default=1)
@@ -840,8 +841,8 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--focal-gamma", type=float, default=2.0)
 
     # Input sizing (H, W)
-    parser.add_argument("--input-h", type=int, default=480)
-    parser.add_argument("--input-w", type=int, default=640)
+    parser.add_argument("--input-h", type=int, default=256)
+    parser.add_argument("--input-w", type=int, default=256)
 
     # Optional multi-task losses
     parser.add_argument("--cls-head-weight", type=float, default=0.0)
@@ -872,7 +873,7 @@ def parse_args() -> TrainConfig:
         focal_alpha=args.focal_alpha,
         focal_gamma=args.focal_gamma,
 
-        input_size=(args.input_h, args.input_w),
+        resize_shape=(args.input_h, args.input_w),
         cls_head_weight=args.cls_head_weight,
         seg_head_weight=args.seg_head_weight,
         seg_bce_weight=args.seg_bce_weight,

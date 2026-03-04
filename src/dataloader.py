@@ -214,6 +214,7 @@ class HandGestureDataset_v2(Dataset):
         self.mask_tensor_dir = os.path.join(root_dir, "mask_tensors")
         self.image_info_json = os.path.join(root_dir, "image_info.json")
         self.resize_shape = [480, 640] if resize_shape is None else resize_shape
+        print(f"Initialized HandGestureDataset_v2 with root_dir={root_dir}, resize_shape={self.resize_shape}")
         self.transform = transform
         with open(self.image_info_json, "r") as f:
             self.image_info = json.load(f)
@@ -231,8 +232,8 @@ class HandGestureDataset_v2(Dataset):
         image_info = self.image_info[idx]
         image_tensor_path = os.path.join(self.image_tensor_dir, image_info["new_image_name"].replace(".png", ".pt"))
         mask_tensor_path = os.path.join(self.mask_tensor_dir, image_info["new_mask_name"].replace(".png", ".pt"))
-        image_tensor = torch.load(image_tensor_path).float()
-        mask_tensor = torch.load(mask_tensor_path).float()
+        image_tensor = torch.load(image_tensor_path, weights_only=True).float()
+        mask_tensor = torch.load(mask_tensor_path, weights_only=True).float()
 
         # Defensive normalization in case any tensors were saved as 0..255.
         if image_tensor.numel() > 0 and image_tensor.max() > 1.5:
@@ -248,12 +249,15 @@ class HandGestureDataset_v2(Dataset):
             like_or_dislike = True
         else:
             like_or_dislike = False
-        if self.transform:
-            image_tensor, mask_tensor, bbox = self.transform(image_tensor, mask_tensor, bbox, like_or_dislike)
-
+        
         if self.resize_shape is not None:
             image_tensor, mask_tensor = self.resize(image_tensor, mask_tensor, self.resize_shape)
             bbox = mask_to_bbox(mask_tensor)
+        
+        if self.transform:
+            image_tensor, mask_tensor, bbox = self.transform(image_tensor, mask_tensor, bbox, like_or_dislike)
+
+        
 
         return image_tensor, mask_tensor, class_id, bbox
 
@@ -322,7 +326,7 @@ def visualize_augmented_samples(
     out_dir: str = "outputs/test_data",
     num_samples: int = 8,
     seed: int = 0,
-    out_size: Tuple[int, int] = (480, 640),
+    out_size: Tuple[int, int] = (256, 256),
     indices: Optional[list] = None,
 ):
     """Save a few augmented (image, mask, bbox) visualizations to disk.
@@ -343,7 +347,7 @@ def visualize_augmented_samples(
     random.seed(seed)
     torch.manual_seed(seed)
 
-    dataset = HandGestureDataset_v2(root_dir=root_dir, transform=SegAugment_v2(out_size=out_size))
+    dataset = HandGestureDataset_v2(root_dir=root_dir, resize_shape=out_size, transform=SegAugment_v2(out_size=out_size))
     if len(dataset) == 0:
         raise ValueError(f"Dataset is empty: {root_dir}")
 
@@ -429,13 +433,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--out_h",
         type=int,
-        default=480,
+        default=256,
         help="Augmentation output height (matches SegAugment out_size)",
     )
     parser.add_argument(
         "--out_w",
         type=int,
-        default=640,
+        default=256,
         help="Augmentation output width (matches SegAugment out_size)",
     )
     args = parser.parse_args()
