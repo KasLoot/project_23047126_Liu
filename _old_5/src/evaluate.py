@@ -18,11 +18,49 @@ from training_utils import (
 )
 
 
-def load_checkpoint(model: HandGestureMultiTask, checkpoint_path: str, device: torch.device) -> dict:
+def resolve_checkpoint_source(ckpt: dict, checkpoint_source: str) -> str:
+    if checkpoint_source == "model":
+        if "model" not in ckpt:
+            raise KeyError("Checkpoint does not contain a model state_dict")
+        return "model"
+
+    if checkpoint_source == "ema":
+        if "ema_model" not in ckpt:
+            raise KeyError("Checkpoint does not contain an ema_model state_dict")
+        return "ema_model"
+
+    preferred = ckpt.get("best_checkpoint_source")
+    if preferred in ("model", "ema_model") and preferred in ckpt:
+        return preferred
+
+    if "model" in ckpt:
+        return "model"
+    if "ema_model" in ckpt:
+        return "ema_model"
+
+    raise KeyError("Checkpoint does not contain a supported model state_dict")
+
+
+def load_checkpoint(
+    model: HandGestureMultiTask,
+    checkpoint_path: str,
+    device: torch.device,
+    checkpoint_source: str,
+) -> dict:
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=True)
-    state = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+    if isinstance(ckpt, dict):
+        state_key = resolve_checkpoint_source(ckpt, checkpoint_source)
+        state = ckpt[state_key]
+    else:
+        state = ckpt
+        state_key = "model"
     model.load_state_dict(state, strict=True)
-    return ckpt if isinstance(ckpt, dict) else {}
+    if not isinstance(ckpt, dict):
+        return {"_loaded_checkpoint_source": state_key}
+
+    ckpt = dict(ckpt)
+    ckpt["_loaded_checkpoint_source"] = state_key
+    return ckpt
 
 
 @torch.no_grad()
@@ -73,6 +111,13 @@ def evaluate(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate the hand-gesture multi-task model")
     parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument(
+        "--checkpoint_source",
+        type=str,
+        choices=("auto", "model", "ema"),
+        default="auto",
+        help="Which weights to evaluate from a training checkpoint. 'auto' uses checkpoint metadata when available and otherwise defaults to the live model weights.",
+    )
     parser.add_argument("--dataset", type=str, default="/workspace/project_23047126_Liu/dataset/dataset_v1/test")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_workers", type=int, default=4)
@@ -99,7 +144,7 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = HandGestureMultiTask(num_classes=10, seg_out_channels=1).to(device)
-    ckpt = load_checkpoint(model, args.checkpoint, device)
+    ckpt = load_checkpoint(model, args.checkpoint, device, checkpoint_source=args.checkpoint_source)
 
     if "loss_weights" in ckpt:
         # If checkpoint has training weights, use those unless user explicitly overrides.
@@ -122,6 +167,10 @@ def main() -> None:
         pin_memory=torch.cuda.is_available(),
         collate_fn=multitask_collate_fn,
     )
+
+    print(f"Evaluating dataset: {args.dataset}")
+    print(f"Number of samples: {len(dataset)}")
+    print(f"Loaded checkpoint source: {ckpt.get('_loaded_checkpoint_source', 'model')}")
 
     avg_logs, per_class_acc = evaluate(model, loader, device=device, weights=weights)
 

@@ -84,125 +84,54 @@ class SegAugment_v2:
         y2 = cy + bh / 2.0
 
         # --- Geometric Transforms ---
-        
-        if like_or_dislike == True:
-            # Horizontal flip
-            if random.random() < 0.5:
-                image = F.hflip(image)
-                mask = F.hflip(mask)
-                x1, x2 = w - x2, w - x1
 
-            # # Vertical flip
-            # if random.random() < 0.3:
-            #     image = F.vflip(image)
-            #     mask = F.vflip(mask)
-            #     y1, y2 = h - y2, h - y1
+        if random.random() < 0.5:
+            image = F.hflip(image)
+            mask = F.hflip(mask)
+            x1, x2 = w - x2, w - x1
 
-            # Rotation
-            angle = random.uniform(-10, 10)
-            if angle != 0:
-                image = F.rotate(image, angle, interpolation=InterpolationMode.BILINEAR)
-                mask = F.rotate(mask, angle, interpolation=InterpolationMode.NEAREST)
-                
-                # Rotate box corners around the image center
-                angle_rad = math.radians(-angle) # -angle because torchvision rotates CCW
-                icx, icy = w / 2.0, h / 2.0 # Image center
-                
-                corners = [(x1, y1), (x2, y1), (x1, y2), (x2, y2)]
-                new_corners = []
-                for px, py in corners:
-                    # Shift to origin
-                    ox, oy = px - icx, py - icy
-                    # Apply rotation
-                    rx = ox * math.cos(angle_rad) - oy * math.sin(angle_rad)
-                    ry = ox * math.sin(angle_rad) + oy * math.cos(angle_rad)
-                    # Shift back
-                    new_corners.append((rx + icx, ry + icy))
-                    
-                xs = torch.stack([c[0] for c in new_corners])
-                ys = torch.stack([c[1] for c in new_corners])
-                x1, x2 = xs.min(), xs.max()
-                y1, y2 = ys.min(), ys.max()
+        angle_limit = 12.0 if like_or_dislike else 20.0
+        angle = random.uniform(-angle_limit, angle_limit)
+        translate_x = random.uniform(-0.06, 0.06) * w
+        translate_y = random.uniform(-0.06, 0.06) * h
+        scale = random.uniform(0.92, 1.08)
 
-            # Scale/Resize
-            target_h, target_w = int(self.out_size[0]), int(self.out_size[1])
-            # scale_x = float(target_w) / float(w)
-            # scale_y = float(target_h) / float(h)
-            
-            # torchvision expects size=(H, W)
-            image = F.resize(image, (target_h, target_w), interpolation=InterpolationMode.BILINEAR)
-            mask = F.resize(mask, (target_h, target_w), interpolation=InterpolationMode.NEAREST)
-            
-            bbox_out = mask_to_bbox(mask)
+        image = F.affine(
+            image,
+            angle=angle,
+            translate=[int(round(translate_x)), int(round(translate_y))],
+            scale=scale,
+            shear=[0.0, 0.0],
+            interpolation=InterpolationMode.BILINEAR,
+        )
+        mask = F.affine(
+            mask,
+            angle=angle,
+            translate=[int(round(translate_x)), int(round(translate_y))],
+            scale=scale,
+            shear=[0.0, 0.0],
+            interpolation=InterpolationMode.NEAREST,
+        )
 
-            # --- Appearance Transforms (Image Only) ---
-            if random.random() < 0.5:
-                image = F.adjust_brightness(image, brightness_factor=random.uniform(0.7, 1.3))
-            if random.random() < 0.5:
-                image = F.adjust_contrast(image, contrast_factor=random.uniform(0.7, 1.3))
-            if random.random() < 0.3:
-                image = F.adjust_saturation(image, saturation_factor=random.uniform(0.8, 1.2))
-            if random.random() < 0.3:
-                image = F.adjust_hue(image, hue_factor=random.uniform(-0.05, 0.05))
-        else:
-            # Horizontal flip
-            if random.random() < 0.5:
-                image = F.hflip(image)
-                mask = F.hflip(mask)
-                x1, x2 = w - x2, w - x1
+        target_h, target_w = int(self.out_size[0]), int(self.out_size[1])
+        image = F.resize(image, (target_h, target_w), interpolation=InterpolationMode.BILINEAR)
+        mask = F.resize(mask, (target_h, target_w), interpolation=InterpolationMode.NEAREST)
 
-            # Vertical flip
-            if random.random() < 0.3:
-                image = F.vflip(image)
-                mask = F.vflip(mask)
-                y1, y2 = h - y2, h - y1
+        bbox_out = mask_to_bbox(mask)
 
-            # Rotation
-            angle = random.uniform(-90, 90)
-            if angle != 0:
-                image = F.rotate(image, angle, interpolation=InterpolationMode.BILINEAR)
-                mask = F.rotate(mask, angle, interpolation=InterpolationMode.NEAREST)
-                
-                # Rotate box corners around the image center
-                angle_rad = math.radians(-angle) # -angle because torchvision rotates CCW
-                icx, icy = w / 2.0, h / 2.0 # Image center
-                
-                corners = [(x1, y1), (x2, y1), (x1, y2), (x2, y2)]
-                new_corners = []
-                for px, py in corners:
-                    # Shift to origin
-                    ox, oy = px - icx, py - icy
-                    # Apply rotation
-                    rx = ox * math.cos(angle_rad) - oy * math.sin(angle_rad)
-                    ry = ox * math.sin(angle_rad) + oy * math.cos(angle_rad)
-                    # Shift back
-                    new_corners.append((rx + icx, ry + icy))
-                    
-                xs = torch.stack([c[0] for c in new_corners])
-                ys = torch.stack([c[1] for c in new_corners])
-                x1, x2 = xs.min(), xs.max()
-                y1, y2 = ys.min(), ys.max()
+        # --- Appearance Transforms (Image Only) ---
+        if random.random() < 0.6:
+            image = F.adjust_brightness(image, brightness_factor=random.uniform(0.8, 1.2))
+        if random.random() < 0.6:
+            image = F.adjust_contrast(image, contrast_factor=random.uniform(0.8, 1.2))
+        if random.random() < 0.35:
+            image = F.adjust_saturation(image, saturation_factor=random.uniform(0.85, 1.15))
+        if random.random() < 0.2:
+            image = F.adjust_hue(image, hue_factor=random.uniform(-0.03, 0.03))
 
-            # Scale/Resize
-            target_h, target_w = int(self.out_size[0]), int(self.out_size[1])
-            # scale_x = float(target_w) / float(w)
-            # scale_y = float(target_h) / float(h)
-            
-            # torchvision expects size=(H, W)
-            image = F.resize(image, (target_h, target_w), interpolation=InterpolationMode.BILINEAR)
-            mask = F.resize(mask, (target_h, target_w), interpolation=InterpolationMode.NEAREST)
-            
-            bbox_out = mask_to_bbox(mask)
-
-            # --- Appearance Transforms (Image Only) ---
-            if random.random() < 0.5:
-                image = F.adjust_brightness(image, brightness_factor=random.uniform(0.7, 1.3))
-            if random.random() < 0.5:
-                image = F.adjust_contrast(image, contrast_factor=random.uniform(0.7, 1.3))
-            if random.random() < 0.3:
-                image = F.adjust_saturation(image, saturation_factor=random.uniform(0.8, 1.2))
-            if random.random() < 0.3:
-                image = F.adjust_hue(image, hue_factor=random.uniform(-0.05, 0.05))
+        if random.random() < 0.15:
+            noise = torch.randn_like(image) * 0.02
+            image = (image + noise).clamp(0.0, 1.0)
 
         # Keep dataset's expected bbox shape (1, 4)
         return image, mask, bbox_out.unsqueeze(0)

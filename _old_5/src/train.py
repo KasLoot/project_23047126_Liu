@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import os
 from dataclasses import asdict, dataclass
 
@@ -22,16 +23,47 @@ from training_utils import (
 class TrainConfig:
     train_dataset_path: str = "/workspace/project_23047126_Liu/dataset/dataset_v1/train"
     val_dataset_path: str = "/workspace/project_23047126_Liu/dataset/dataset_v1/val"
-    output_dir: str = "/workspace/project_23047126_Liu/outputs/train_2"
+    output_dir: str = "/workspace/project_23047126_Liu/outputs/train_3"
     epochs: int = 50
     batch_size: int = 32
     num_workers: int = 4
     lr: float = 5e-4
     weight_decay: float = 1e-2
+    min_lr_ratio: float = 0.05
+    warmup_epochs: int = 3
     seed: int = 42
-    input_h: int = 480
-    input_w: int = 640
+    input_h: int = 256
+    input_w: int = 256
     num_classes: int = 10
+    ema_decay: float = 0.999
+
+
+class ModelEMA:
+    def __init__(self, model: HandGestureMultiTask, decay: float) -> None:
+        self.decay = float(decay)
+        self.num_updates = 0
+        self.module = copy.deepcopy(model).eval()
+        for param in self.module.parameters():
+            param.requires_grad_(False)
+
+    def current_decay(self) -> float:
+        self.num_updates += 1
+        # Keep EMA close to the live model early on so validation does not lag behind
+        # by multiple epochs on small training runs.
+        warmup_decay = (1.0 + self.num_updates) / (10.0 + self.num_updates)
+        return min(self.decay, warmup_decay)
+
+    @torch.no_grad()
+    def update(self, model: HandGestureMultiTask) -> None:
+        decay = self.current_decay()
+        ema_state = self.module.state_dict()
+        model_state = model.state_dict()
+        for name, ema_value in ema_state.items():
+            model_value = model_state[name].detach()
+            if not torch.is_floating_point(ema_value):
+                ema_value.copy_(model_value)
+                continue
+            ema_value.mul_(decay).add_(model_value, alpha=1.0 - decay)
 
 
 def build_optimizer(model: HandGestureMultiTask, lr: float, weight_decay: float) -> torch.optim.Optimizer:
@@ -62,6 +94,7 @@ def run_epoch(
     weights: LossWeights,
     optimizer: torch.optim.Optimizer | None,
     scaler: torch.amp.GradScaler | None = None,
+    ema: ModelEMA | None = None,
 ) -> dict[str, float]:
     is_train = optimizer is not None
     model.train(mode=is_train)
@@ -103,6 +136,9 @@ def run_epoch(
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                     optimizer.step()
 
+                if ema is not None:
+                    ema.update(model)
+
             logs.append(batch_log)
 
     return average_log_dict(logs)
@@ -118,6 +154,9 @@ def parse_args() -> tuple[TrainConfig, LossWeights]:
     parser.add_argument("--num_workers", type=int, default=TrainConfig.num_workers)
     parser.add_argument("--lr", type=float, default=TrainConfig.lr)
     parser.add_argument("--weight_decay", type=float, default=TrainConfig.weight_decay)
+    parser.add_argument("--min_lr_ratio", type=float, default=TrainConfig.min_lr_ratio)
+    parser.add_argument("--warmup_epochs", type=int, default=TrainConfig.warmup_epochs)
+    parser.add_argument("--ema_decay", type=float, default=TrainConfig.ema_decay)
     parser.add_argument("--seed", type=int, default=TrainConfig.seed)
     parser.add_argument("--input_h", type=int, default=TrainConfig.input_h)
     parser.add_argument("--input_w", type=int, default=TrainConfig.input_w)
@@ -140,9 +179,12 @@ def parse_args() -> tuple[TrainConfig, LossWeights]:
         num_workers=args.num_workers,
         lr=args.lr,
         weight_decay=args.weight_decay,
+        min_lr_ratio=args.min_lr_ratio,
+        warmup_epochs=args.warmup_epochs,
         seed=args.seed,
         input_h=args.input_h,
         input_w=args.input_w,
+        ema_decay=args.ema_decay,
     )
 
     weights = LossWeights(
@@ -186,16 +228,42 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = HandGestureMultiTask(num_classes=cfg.num_classes, seg_out_channels=1).to(device)
     optimizer = build_optimizer(model, lr=cfg.lr, weight_decay=cfg.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=max(cfg.epochs, 1),
-        eta_min=cfg.lr * 0.1,
-    )
+    warmup_epochs = min(max(cfg.warmup_epochs, 0), max(cfg.epochs - 1, 0))
+    cosine_epochs = max(cfg.epochs - warmup_epochs, 1)
+    min_lr = cfg.lr * cfg.min_lr_ratio
+    if warmup_epochs > 0:
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[
+                torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.2, end_factor=1.0, total_iters=warmup_epochs),
+                torch.optim.lr_scheduler.CosineAnnealingLR(
+                    optimizer,
+                    T_max=cosine_epochs,
+                    eta_min=min_lr,
+                ),
+            ],
+            milestones=[warmup_epochs],
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=max(cfg.epochs, 1),
+            eta_min=min_lr,
+        )
     scaler = torch.amp.GradScaler("cuda", enabled=torch.cuda.is_available())
+    ema = ModelEMA(model, decay=cfg.ema_decay)
 
     best_val_loss = float("inf")
     for epoch in range(1, cfg.epochs + 1):
-        train_logs = run_epoch(model, train_loader, device=device, weights=weights, optimizer=optimizer, scaler=scaler)
+        train_logs = run_epoch(
+            model,
+            train_loader,
+            device=device,
+            weights=weights,
+            optimizer=optimizer,
+            scaler=scaler,
+            ema=ema,
+        )
         val_logs = run_epoch(model, val_loader, device=device, weights=weights, optimizer=None)
         scheduler.step()
         current_lr = optimizer.param_groups[0]["lr"]
@@ -212,9 +280,13 @@ def main() -> None:
         ckpt = {
             "epoch": epoch,
             "model": model.state_dict(),
+            "ema_model": ema.module.state_dict(),
             "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
             "train_logs": train_logs,
             "val_logs": val_logs,
+            "best_checkpoint_source": "model",
+            "ema_num_updates": ema.num_updates,
             "train_config": asdict(cfg),
             "loss_weights": asdict(weights),
         }
