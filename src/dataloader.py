@@ -90,6 +90,11 @@ class SegAugment_v2:
             image = F.hflip(image)
             mask = F.hflip(mask)
             x1, x2 = w - x2, w - x1
+        
+        if like_or_dislike == False and random.random() < 0.5:
+            image = F.vflip(image)
+            mask = F.vflip(mask)
+            y1, y2 = h - y2, h - y1
 
         angle_limit = 12.0 if like_or_dislike else 20.0
         angle = random.uniform(-angle_limit, angle_limit)
