@@ -69,7 +69,7 @@ def _save_confusion_matrix_figure(confusion_matrix: np.ndarray, out_path: str) -
     plt.close(fig)
 
 @torch.no_grad()
-def evaluate_and_visualize(weights_path: str = "outputs/s2/t1/s2_best_model.pth", 
+def evaluate_and_visualize(weights_path: str = "outputs/s2/t2/best_model.pth", 
                            val_dir: str = "dataset/dataset_v1/test",
                            out_dir: str = "outputs/eval_results",
                            num_visualize: int = 10,

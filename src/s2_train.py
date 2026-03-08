@@ -1,4 +1,7 @@
 import os
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.optim as optim
@@ -86,13 +89,81 @@ def set_stage2_train_mode(model: HandGestureMultiTask) -> None:
     model.detect.eval()
 
 
+def save_training_plots(history: dict[str, list[float]], output_dir: str) -> None:
+    epochs = np.arange(1, len(history["train_acc"]) + 1)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, history["train_loss"], label="Train Loss")
+    plt.plot(epochs, history["val_loss"], label="Val Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "loss_curve.png"), dpi=150)
+    plt.close()
+
+    # Segmentation IoU by class (hand vs background) across train/val.
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, history["train_hand_iou"], label="Train Hand IoU")
+    plt.plot(epochs, history["train_background_iou"], label="Train Background IoU")
+    plt.plot(epochs, history["val_hand_iou"], label="Val Hand IoU")
+    plt.plot(epochs, history["val_background_iou"], label="Val Background IoU")
+    plt.plot(epochs, history["train_miou"], label="Train Mean IoU", linestyle="--")
+    plt.plot(epochs, history["val_miou"], label="Val Mean IoU", linestyle="--")
+    plt.xlabel("Epoch")
+    plt.ylabel("IoU")
+    plt.title("Segmentation IoU (Hand vs Background)")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "seg_iou_hand_vs_background.png"), dpi=150)
+    plt.close()
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, history["train_dice"], label="Train Dice")
+    plt.plot(epochs, history["val_dice"], label="Val Dice")
+    plt.xlabel("Epoch")
+    plt.ylabel("Dice")
+    plt.title("Segmentation Dice Coefficient")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "seg_dice.png"), dpi=150)
+    plt.close()
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, history["train_acc"], label="Train Top-1 Accuracy")
+    plt.plot(epochs, history["val_acc"], label="Val Top-1 Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Classification Top-1 Accuracy")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "cls_top1_accuracy.png"), dpi=150)
+    plt.close()
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, history["train_macro_f1"], label="Train Macro-F1")
+    plt.plot(epochs, history["val_macro_f1"], label="Val Macro-F1")
+    plt.xlabel("Epoch")
+    plt.ylabel("Macro-F1")
+    plt.title("Classification Macro-F1 (10 Classes)")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "cls_macro_f1.png"), dpi=150)
+    plt.close()
+
+
 
 def train():
     # ==========================================
     # 1. Configuration & Hyperparameters
     # ==========================================
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
 
     train_dir = "dataset/dataset_v1/train"
     val_dir = "dataset/dataset_v1/val" 
@@ -103,186 +174,235 @@ def train():
     weight_decay = 1e-2
 
     # Save directory for checkpoints
-    output_dir = "outputs/s2/t1"
+    output_dir = "outputs/s2/t2"
     os.makedirs(output_dir, exist_ok=True)
+    log_path = os.path.join(output_dir, "train_log.txt")
 
-    # ==========================================
-    # 2. Dataset & DataLoader Setup
-    # ==========================================
-    input_size = (480, 640)
-    
-    # Training dataset with augmentations
-    train_transform = SegAugment_v2(out_size=input_size)
-    train_dataset = HandGestureDataset_v2(
-        root_dir=train_dir, 
-        transform=train_transform,
-        resize_shape=list(input_size)
-    )
-    train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, 
-        num_workers=4, pin_memory=True, drop_last=True,
-        collate_fn=detection_collate_fn,
-        persistent_workers=True,
-    )
+    with open(log_path, "w", encoding="utf-8") as log_file:
+        def log(message: str) -> None:
+            print(message)
+            log_file.write(message + "\n")
+            log_file.flush()
 
-    # Validation dataset WITHOUT augmentations (transform=None)
-    val_dataset = HandGestureDataset_v2(
-        root_dir=val_dir, 
-        transform=None,  # Only native resizing applied
-        resize_shape=list(input_size)
-    )
-    val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, shuffle=False, 
-        num_workers=4, pin_memory=True, drop_last=False,
-        collate_fn=detection_collate_fn,
-        persistent_workers=True,
-    )
+        log(f"Using device: {device}")
 
-    # ==========================================
-    # 3. Model & Loss & Optimizer Setup
-    # ==========================================
-    model = HandGestureMultiTask(num_classes=num_classes, reg_max=1)
-    checkpoint_path = "outputs/s1/t1/best_model.pth"
-    if os.path.exists(checkpoint_path):
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
-        print(f"Loaded weights from {checkpoint_path} for Stage 2 training.")
-    else:
-        print(f"No checkpoint found at {checkpoint_path}. Starting Stage 2 training from scratch.")
-    # model.freeze_for_s2_training()  # Freeze backbone and detection head for Stage 2 training
-    for param in model.backbone.parameters():
-        param.requires_grad = False
-    for param in model.neck.parameters():
-        param.requires_grad = False
-    for param in model.detect.parameters():
-        param.requires_grad = False
-    torch.set_float32_matmul_precision('high')
-    model = model.to(device)
-    
+        # ==========================================
+        # 2. Dataset & DataLoader Setup
+        # ==========================================
+        input_size = (480, 640)
+        
+        # Training dataset with augmentations
+        train_transform = SegAugment_v2(out_size=input_size)
+        train_dataset = HandGestureDataset_v2(
+            root_dir=train_dir, 
+            transform=train_transform,
+            resize_shape=list(input_size)
+        )
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=True, 
+            num_workers=4, pin_memory=True, drop_last=True,
+            collate_fn=detection_collate_fn,
+            persistent_workers=True,
+        )
+
+        # Validation dataset WITHOUT augmentations (transform=None)
+        val_dataset = HandGestureDataset_v2(
+            root_dir=val_dir, 
+            transform=None,  # Only native resizing applied
+            resize_shape=list(input_size)
+        )
+        val_loader = DataLoader(
+            val_dataset, batch_size=batch_size, shuffle=False, 
+            num_workers=4, pin_memory=True, drop_last=False,
+            collate_fn=detection_collate_fn,
+            persistent_workers=True,
+        )
+
+        # ==========================================
+        # 3. Model & Loss & Optimizer Setup
+        # ==========================================
+        model = HandGestureMultiTask(num_classes=num_classes, reg_max=1)
+        checkpoint_path = "outputs/s1/t2/best_model.pth"
+        if os.path.exists(checkpoint_path):
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
+            log(f"Loaded weights from {checkpoint_path} for Stage 2 training.")
+        else:
+            log(f"No checkpoint found at {checkpoint_path}. Starting Stage 2 training from scratch.")
+        # model.freeze_for_s2_training()  # Freeze backbone and detection head for Stage 2 training
+        for param in model.backbone.parameters():
+            param.requires_grad = False
+        for param in model.neck.parameters():
+            param.requires_grad = False
+        for param in model.detect.parameters():
+            param.requires_grad = False
+        torch.set_float32_matmul_precision('high')
+        model = model.to(device)
+        
 
 
-    cls_loss_fn = torch.nn.CrossEntropyLoss()
-    seg_loss_fn = torch.nn.BCEWithLogitsLoss()
+        cls_loss_fn = torch.nn.CrossEntropyLoss()
+        seg_loss_fn = torch.nn.BCEWithLogitsLoss()
 
-    optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate, weight_decay=weight_decay)
+        optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate, weight_decay=weight_decay)
 
-    best_val_loss = float("inf")
-    best_val_selection = (-1.0, -1.0, float("-inf"))
-    for epoch in range(epochs):
-        set_stage2_train_mode(model)
-        total_loss = 0.0
-        train_cls_correct = 0
-        train_cls_total = 0
-        train_seg_sums = {
-            "hand_intersection": 0.0,
-            "hand_union": 0.0,
-            "background_intersection": 0.0,
-            "background_union": 0.0,
-            "pred_hand_pixels": 0.0,
-            "gt_hand_pixels": 0.0,
+        history: dict[str, list[float]] = {
+            "train_loss": [],
+            "val_loss": [],
+            "train_miou": [],
+            "val_miou": [],
+            "train_hand_iou": [],
+            "train_background_iou": [],
+            "val_hand_iou": [],
+            "val_background_iou": [],
+            "train_dice": [],
+            "val_dice": [],
+            "train_acc": [],
+            "val_acc": [],
+            "train_macro_f1": [],
+            "val_macro_f1": [],
         }
 
-        for images, masks, class_ids, gt_bboxes in train_loader:
-            images = images.to(device)
-            masks = masks.to(device).float()
-            class_ids = class_ids.to(device)
+        best_val_loss = float("inf")
+        best_val_selection = (-1.0, -1.0, float("-inf"))
+        for epoch in range(epochs):
+            set_stage2_train_mode(model)
+            total_loss = 0.0
+            train_cls_correct = 0
+            train_cls_total = 0
+            train_confusion_matrix = np.zeros((num_classes, num_classes), dtype=np.int64)
+            train_seg_sums = {
+                "hand_intersection": 0.0,
+                "hand_union": 0.0,
+                "background_intersection": 0.0,
+                "background_union": 0.0,
+                "pred_hand_pixels": 0.0,
+                "gt_hand_pixels": 0.0,
+            }
 
-            optimizer.zero_grad()
-
-            outputs = model(images)
-            cls_outputs = outputs["cls"]  # (B, 10)
-            seg_outputs = outputs["seg"]  # (B, 1, H, W)
-
-            cls_loss = cls_loss_fn(cls_outputs, class_ids)
-            seg_loss = seg_loss_fn(seg_outputs, masks)
-            loss = cls_loss + seg_loss
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-
-            train_preds = cls_outputs.argmax(dim=1)
-            train_cls_correct += (train_preds == class_ids).sum().item()
-            train_cls_total += class_ids.size(0)
-
-            train_batch_seg = summarize_segmentation_metrics(seg_outputs, masks)
-            for key, value in train_batch_seg.items():
-                train_seg_sums[key] += value
-
-        avg_train_loss = total_loss / len(train_loader)
-        train_acc = train_cls_correct / train_cls_total if train_cls_total > 0 else 0.0
-        train_miou, train_dice, train_hand_iou, train_background_iou = finalize_segmentation_metrics(train_seg_sums)
-
-        model.eval()
-        val_total_loss = 0.0
-        val_cls_correct = 0
-        val_cls_total = 0
-        val_confusion_matrix = np.zeros((num_classes, num_classes), dtype=np.int64)
-        val_seg_sums = {
-            "hand_intersection": 0.0,
-            "hand_union": 0.0,
-            "background_intersection": 0.0,
-            "background_union": 0.0,
-            "pred_hand_pixels": 0.0,
-            "gt_hand_pixels": 0.0,
-        }
-
-        with torch.no_grad():
-            for images, masks, class_ids, gt_bboxes in val_loader:
+            for images, masks, class_ids, gt_bboxes in train_loader:
                 images = images.to(device)
                 masks = masks.to(device).float()
                 class_ids = class_ids.to(device)
 
+                optimizer.zero_grad()
+
                 outputs = model(images)
-                cls_outputs = outputs["cls"]
-                seg_outputs = outputs["seg"]
+                cls_outputs = outputs["cls"]  # (B, 10)
+                seg_outputs = outputs["seg"]  # (B, 1, H, W)
 
                 cls_loss = cls_loss_fn(cls_outputs, class_ids)
                 seg_loss = seg_loss_fn(seg_outputs, masks)
                 loss = cls_loss + seg_loss
-                val_total_loss += loss.item()
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
 
-                val_preds = cls_outputs.argmax(dim=1)
-                val_cls_correct += (val_preds == class_ids).sum().item()
-                val_cls_total += class_ids.size(0)
+                train_preds = cls_outputs.argmax(dim=1)
+                train_cls_correct += (train_preds == class_ids).sum().item()
+                train_cls_total += class_ids.size(0)
+                for true_id, pred_id in zip(class_ids.detach().cpu().tolist(), train_preds.detach().cpu().tolist()):
+                    train_confusion_matrix[int(true_id), int(pred_id)] += 1
 
-                for true_id, pred_id in zip(class_ids.detach().cpu().tolist(), val_preds.detach().cpu().tolist()):
-                    val_confusion_matrix[int(true_id), int(pred_id)] += 1
+                train_batch_seg = summarize_segmentation_metrics(seg_outputs, masks)
+                for key, value in train_batch_seg.items():
+                    train_seg_sums[key] += value
 
-                val_batch_seg = summarize_segmentation_metrics(seg_outputs, masks)
-                for key, value in val_batch_seg.items():
-                    val_seg_sums[key] += value
+            avg_train_loss = total_loss / len(train_loader)
+            train_acc = train_cls_correct / train_cls_total if train_cls_total > 0 else 0.0
+            train_macro_f1 = compute_macro_f1(train_confusion_matrix)
+            train_miou, train_dice, train_hand_iou, train_background_iou = finalize_segmentation_metrics(train_seg_sums)
 
-        avg_val_loss = val_total_loss / len(val_loader)
-        val_acc = val_cls_correct / val_cls_total if val_cls_total > 0 else 0.0
-        val_macro_f1 = compute_macro_f1(val_confusion_matrix)
-        val_miou, val_dice, val_hand_iou, val_background_iou = finalize_segmentation_metrics(val_seg_sums)
+            model.eval()
+            val_total_loss = 0.0
+            val_cls_correct = 0
+            val_cls_total = 0
+            val_confusion_matrix = np.zeros((num_classes, num_classes), dtype=np.int64)
+            val_seg_sums = {
+                "hand_intersection": 0.0,
+                "hand_union": 0.0,
+                "background_intersection": 0.0,
+                "background_union": 0.0,
+                "pred_hand_pixels": 0.0,
+                "gt_hand_pixels": 0.0,
+            }
 
-        print(
-            f"Epoch {epoch+1}/{epochs} | "
-            f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | "
-            f"Train Acc: {train_acc:.4f} | Val Acc: {val_acc:.4f} | "
-            f"Val Macro F1: {val_macro_f1:.4f}"
-        )
-        print(
-            f"Train Seg mIoU: {train_miou:.4f} (hand={train_hand_iou:.4f}, background={train_background_iou:.4f}) | "
-            f"Train Dice: {train_dice:.4f}"
-        )
-        print(
-            f"Val Seg mIoU: {val_miou:.4f} (hand={val_hand_iou:.4f}, background={val_background_iou:.4f}) | "
-            f"Val Dice: {val_dice:.4f}"
-        )
-        print("Validation Confusion Matrix (rows=true, cols=pred):")
-        print(format_confusion_matrix(val_confusion_matrix))
+            with torch.no_grad():
+                for images, masks, class_ids, gt_bboxes in val_loader:
+                    images = images.to(device)
+                    masks = masks.to(device).float()
+                    class_ids = class_ids.to(device)
 
-        torch.save(model.state_dict(), f"{output_dir}/s2_last_model.pth")
-        current_selection = (val_macro_f1, val_dice, -avg_val_loss)
-        if current_selection > best_val_selection:
-            best_val_selection = current_selection
-            best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), f"{output_dir}/s2_best_model.pth")
-            print(
-                f"Saved new best Stage 2 model to {output_dir}/s2_best_model.pth "
-                f"(macro_f1={val_macro_f1:.4f}, dice={val_dice:.4f}, val_loss={best_val_loss:.4f})"
+                    outputs = model(images)
+                    cls_outputs = outputs["cls"]
+                    seg_outputs = outputs["seg"]
+
+                    cls_loss = cls_loss_fn(cls_outputs, class_ids)
+                    seg_loss = seg_loss_fn(seg_outputs, masks)
+                    loss = cls_loss + seg_loss
+                    val_total_loss += loss.item()
+
+                    val_preds = cls_outputs.argmax(dim=1)
+                    val_cls_correct += (val_preds == class_ids).sum().item()
+                    val_cls_total += class_ids.size(0)
+
+                    for true_id, pred_id in zip(class_ids.detach().cpu().tolist(), val_preds.detach().cpu().tolist()):
+                        val_confusion_matrix[int(true_id), int(pred_id)] += 1
+
+                    val_batch_seg = summarize_segmentation_metrics(seg_outputs, masks)
+                    for key, value in val_batch_seg.items():
+                        val_seg_sums[key] += value
+
+            avg_val_loss = val_total_loss / len(val_loader)
+            val_acc = val_cls_correct / val_cls_total if val_cls_total > 0 else 0.0
+            val_macro_f1 = compute_macro_f1(val_confusion_matrix)
+            val_miou, val_dice, val_hand_iou, val_background_iou = finalize_segmentation_metrics(val_seg_sums)
+
+            history["train_loss"].append(avg_train_loss)
+            history["val_loss"].append(avg_val_loss)
+            history["train_hand_iou"].append(train_hand_iou)
+            history["train_background_iou"].append(train_background_iou)
+            history["val_hand_iou"].append(val_hand_iou)
+            history["val_background_iou"].append(val_background_iou)
+            history["train_miou"].append(train_miou)
+            history["val_miou"].append(val_miou)
+            history["train_dice"].append(train_dice)
+            history["val_dice"].append(val_dice)
+            history["train_acc"].append(train_acc)
+            history["val_acc"].append(val_acc)
+            history["train_macro_f1"].append(train_macro_f1)
+            history["val_macro_f1"].append(val_macro_f1)
+
+            save_training_plots(history, output_dir)
+
+            log(
+                f"Epoch {epoch+1}/{epochs} | "
+                f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | "
+                f"Train Acc: {train_acc:.4f} | Val Acc: {val_acc:.4f} | "
+                f"Train Macro F1: {train_macro_f1:.4f} | Val Macro F1: {val_macro_f1:.4f}"
             )
+            log(
+                f"Train Seg mIoU: {train_miou:.4f} (hand={train_hand_iou:.4f}, background={train_background_iou:.4f}) | "
+                f"Train Dice: {train_dice:.4f}"
+            )
+            log(
+                f"Val Seg mIoU: {val_miou:.4f} (hand={val_hand_iou:.4f}, background={val_background_iou:.4f}) | "
+                f"Val Dice: {val_dice:.4f}"
+            )
+            # log("Validation Confusion Matrix (rows=true, cols=pred):")
+            # log(format_confusion_matrix(val_confusion_matrix))
+
+            torch.save(model.state_dict(), f"{output_dir}/last_model.pth")
+            current_selection = (val_macro_f1, val_dice, -avg_val_loss)
+            if current_selection > best_val_selection:
+                best_val_selection = current_selection
+                best_val_loss = avg_val_loss
+                torch.save(model.state_dict(), f"{output_dir}/best_model.pth")
+                log(
+                    f"Saved new best Stage 2 model to {output_dir}/best_model.pth "
+                    f"(macro_f1={val_macro_f1:.4f}, dice={val_dice:.4f}, val_loss={best_val_loss:.4f})"
+                )
+
+        log(f"Saved training log to {log_path}\n")
 
 
 if __name__ == "__main__":
