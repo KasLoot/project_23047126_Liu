@@ -69,9 +69,9 @@ def _save_confusion_matrix_figure(confusion_matrix: np.ndarray, out_path: str) -
     plt.close(fig)
 
 @torch.no_grad()
-def evaluate_and_visualize(weights_path: str = "B_model/weights/s2_best_model.pth", 
+def evaluate_and_visualize(weights_path: str = "outputs/s2/t1/s2_best_model.pth", 
                            val_dir: str = "dataset/dataset_v1/test",
-                           out_dir: str = "B_model/outputs/eval_results",
+                           out_dir: str = "outputs/eval_results",
                            num_visualize: int = 10,
                            num_speed_warmup_batches: int = 5):
     
@@ -133,7 +133,7 @@ def evaluate_and_visualize(weights_path: str = "B_model/weights/s2_best_model.pt
         if device.type == "cuda":
             torch.cuda.synchronize(device)
         forward_start = time.perf_counter()
-        preds = model(images, tasks=("det", "cls", "seg"))
+        preds = model(images)
         if device.type == "cuda":
             torch.cuda.synchronize(device)
         forward_elapsed = time.perf_counter() - forward_start
@@ -302,7 +302,7 @@ def evaluate_and_visualize(weights_path: str = "B_model/weights/s2_best_model.pt
     print(f"Detector Class Top-1 : {det_class_acc:.2f}%")
     print(f"Detection Acc@IoU0.5 : {det_acc_iou50:.2f}%")
     print(f"Mean Bounding Box IoU: {mean_iou:.4f}")
-    
+
     print(f"Segmentation mIoU    : {seg_mean_iou:.4f} (hand={hand_iou:.4f}, background={background_iou:.4f})")
     print(f"Segmentation Dice    : {dice:.4f}")
     print(
