@@ -175,7 +175,7 @@ def process_test_dataset(test_dataset_path, output_dir):
                     except Exception as e:
                         print(f"Error processing gesture {gesture_dir} in test dataset: {e}")
                         continue
-    with open(os.path.join(output_image_dir.replace("images", ""), "test_image_info.json"), "w") as f:
+    with open(os.path.join(output_image_dir.replace("images", ""), "image_info.json"), "w") as f:
         json.dump(all_image_info, f, indent=4)
 
 
@@ -205,6 +205,9 @@ if __name__ == "__main__":
     # print(f"Test tensor value range: min={test_tensor.min().item()}, max={test_tensor.max().item()}")
     # print(f"Test tensor shape: {test_tensor.shape}")
 
-    test_dataset_path = "dataset/test_data"
+    # test_dataset_path = "dataset/test_data"
     output_test_dir = "dataset/dataset_v1/test"
-    process_test_dataset(test_dataset_path, output_test_dir)
+    # process_test_dataset(test_dataset_path, output_test_dir)
+
+    image_to_tensor(output_test_dir)
+    

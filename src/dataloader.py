@@ -1,3 +1,4 @@
+import PIL.Image as Image
 import torch
 from torch.utils.data import Dataset, DataLoader
 import os
@@ -161,8 +162,16 @@ class HandGestureDataset_v2(Dataset):
         image_info = self.image_info[idx]
         image_tensor_path = os.path.join(self.image_tensor_dir, image_info["new_image_name"].replace(".png", ".pt"))
         mask_tensor_path = os.path.join(self.mask_tensor_dir, image_info["new_mask_name"].replace(".png", ".pt"))
-        image_tensor = torch.load(image_tensor_path, weights_only=True).float()
-        mask_tensor = torch.load(mask_tensor_path, weights_only=True).float()
+        if os.path.exists(image_tensor_path) and os.path.exists(mask_tensor_path):
+            image_tensor = torch.load(image_tensor_path, weights_only=True).float()
+            mask_tensor = torch.load(mask_tensor_path, weights_only=True).float()
+        else:
+            image_path = image_tensor_path.replace(".pt", ".png").replace("image_tensors", "images")
+            mask_path = mask_tensor_path.replace(".pt", ".png").replace("mask_tensors", "masks")
+            with Image.open(image_path) as image_file:
+                image_tensor = F.pil_to_tensor(image_file.convert("RGB")).float() / 255.0
+            with Image.open(mask_path) as mask_file:
+                mask_tensor = F.pil_to_tensor(mask_file.convert("L")).float() / 255.0
 
         # Defensive normalization in case any tensors were saved as 0..255.
         if image_tensor.numel() > 0 and image_tensor.max() > 1.5:

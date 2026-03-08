@@ -19,7 +19,7 @@ Folder name wrong. Now changed from "clip07" to "clip05".
 COMP0248_Poveda: dislike and like gesture data are reversed. Fixed by hand and is in training dataset.
 
 
--> Not fixed: zimo, Gerges dislike, like reverted
+zimo, Gerges dislike, like reverted
 
 
 

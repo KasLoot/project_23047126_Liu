@@ -18,6 +18,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
+
 
 
 # ==========================================
@@ -330,6 +332,14 @@ class Detect(nn.Module):
             for x in ch
         )
 
+        # Initialize the final classification Conv layer bias to predict ~1% probability initially
+        prior_prob = 0.01
+        bias_value = -math.log((1 - prior_prob) / prior_prob)
+        for branch in self.cls_branches:
+            # branch[-1] is the final nn.Conv2d(c_cls, self.nc, 1)
+            nn.init.constant_(branch[-1].bias, bias_value)
+
+
     def forward(self, neck_features: list[torch.Tensor]):
         bs = neck_features[0].shape[0]
         
@@ -337,6 +347,9 @@ class Detect(nn.Module):
         scores = torch.cat([self.cls_branches[i](feat).view(bs, self.nc, -1) for i, feat in enumerate(neck_features)], dim=-1)
         
         return {"boxes": boxes, "scores": scores, "feats": neck_features}
+
+
+
 
 
 class HandGestureMultiTask(nn.Module):
@@ -378,9 +391,13 @@ class HandGestureMultiTask(nn.Module):
             nn.Conv2d(256, 1, kernel_size=1) 
         )
 
-    def freeze_base_model(self):
+    def freeze_for_s2_training(self):
         """Freezes the backbone for fine-tuning."""
         for param in self.backbone.parameters():
+            param.requires_grad = False
+        for param in self.neck.parameters():
+            param.requires_grad = False
+        for param in self.detect.parameters():
             param.requires_grad = False
 
     def forward(self, x: torch.Tensor, tasks: tuple[str, ...] | None = None):
@@ -399,7 +416,7 @@ class HandGestureMultiTask(nn.Module):
 
         # --- B. Classification Output ---
         if "cls" in tasks:
-            out["cls"] = self.cls_head(p5)
+            out["cls"] = self.cls_head(n5)
 
         # --- C. Segmentation Output ---
         if "seg" in tasks:
@@ -432,11 +449,11 @@ def _demo() -> None:
 
     try:
         import torchinfo
-        torchinfo.summary(model, input_size=(1, 3, 256, 256), device=str(device), depth=4)
+        torchinfo.summary(model, input_size=(1, 3, 480, 640), device=str(device), depth=4)
     except ImportError:
         print("torchinfo not installed. Skipping summary.")
 
-    x = torch.randn(1, 3, 256, 256, device=device)
+    x = torch.randn(1, 3, 480, 640, device=device)
     with torch.no_grad():
         preds = model(x)
 
