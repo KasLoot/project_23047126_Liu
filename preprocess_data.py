@@ -7,6 +7,7 @@ from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision.transforms import functional as F
 from tqdm import tqdm
 import shutil
+import random
 
 
 def varify_dir_list(dir_list):
@@ -181,6 +182,97 @@ def process_test_dataset(test_dataset_path, output_dir):
 
 
 
+def balance_data_distribution(dataset_path):
+    """
+    Balances the data distribution in a given folder by undersampling majority classes.
+    It removes image, mask, and tensor files of the removed samples and updates image_info.json.
+    """
+    image_info_path = os.path.join(dataset_path, "image_info.json")
+    if not os.path.exists(image_info_path):
+        print(f"Error: 'image_info.json' not found in {dataset_path}")
+        return
+
+    with open(image_info_path, "r") as f:
+        all_image_info = json.load(f)
+
+    # Get the set of existing image filenames from the images directory
+    images_dir = os.path.join(dataset_path, "images")
+    try:
+        existing_images = set(os.listdir(images_dir))
+    except FileNotFoundError:
+        print(f"Error: 'images' directory not found in {dataset_path}")
+        return
+
+    # Filter all_image_info to only include entries with existing images
+    original_count = len(all_image_info)
+    all_image_info = [info for info in all_image_info if info["new_image_name"] in existing_images]
+    filtered_count = len(all_image_info)
+    
+    if original_count > filtered_count:
+        print(f"Filtered out {original_count - filtered_count} entries from image_info.json that did not have corresponding image files.")
+
+    # Group images by class
+    class_groups = {}
+    for item in all_image_info:
+        class_id = item["class_id"]
+        if class_id not in class_groups:
+            class_groups[class_id] = []
+        class_groups[class_id].append(item)
+
+    # Find the minimum number of samples in any class
+    if not class_groups:
+        print("No classes found in the dataset.")
+        return
+    min_samples = min(len(samples) for samples in class_groups.values())
+    print(f"Balancing dataset to {min_samples} samples per class.")
+
+    new_all_image_info = []
+    removed_files_count = 0
+    files_to_remove = []
+
+    # Undersample classes with more samples than min_samples
+    for class_id, samples in class_groups.items():
+        if len(samples) > min_samples:
+            samples_to_keep = random.sample(samples, min_samples)
+            samples_to_remove = [s for s in samples if s not in samples_to_keep]
+            
+            for sample in samples_to_remove:
+                files_to_remove.append(os.path.join(dataset_path, "images", sample["new_image_name"]))
+                files_to_remove.append(os.path.join(dataset_path, "masks", sample["new_mask_name"]))
+                tensor_name = sample["new_image_name"].replace(".png", ".pt")
+                files_to_remove.append(os.path.join(dataset_path, "image_tensors", tensor_name))
+                files_to_remove.append(os.path.join(dataset_path, "mask_tensors", tensor_name))
+            
+            new_all_image_info.extend(samples_to_keep)
+        else:
+            new_all_image_info.extend(samples)
+
+    for file_path in files_to_remove:
+        try:
+            os.remove(file_path)
+            removed_files_count += 1
+        except FileNotFoundError:
+            print(f"Warning: Could not find a file to delete: {file_path}")
+
+    print(f"Removed {removed_files_count} files to balance the dataset.")
+
+    # Update the image_info.json file
+    with open(image_info_path, "w") as f:
+        json.dump(new_all_image_info, f, indent=4)
+
+    # Print final class distribution after balancing
+    final_distribution = {}
+    for item in new_all_image_info:
+        class_id = item["class_id"]
+        final_distribution[class_id] = final_distribution.get(class_id, 0) + 1
+
+    print("Final data distribution (class_id: count):")
+    for class_id in sorted(final_distribution):
+        print(f"  {class_id}: {final_distribution[class_id]}")
+    
+    print(f"Successfully balanced dataset at {dataset_path} and updated image_info.json.")
+
+
 if __name__ == "__main__":
     # original_train_dataset_path = "dataset/rgb_only_filtered_train"
 
@@ -206,8 +298,9 @@ if __name__ == "__main__":
     # print(f"Test tensor shape: {test_tensor.shape}")
 
     # test_dataset_path = "dataset/test_data"
-    output_test_dir = "dataset/dataset_v1/test"
+    # output_test_dir = "dataset/dataset_v1/test"
     # process_test_dataset(test_dataset_path, output_test_dir)
 
-    image_to_tensor(output_test_dir)
-    
+    # image_to_tensor(output_test_dir)
+
+    balance_data_distribution("dataset/dataset_v1/val")
