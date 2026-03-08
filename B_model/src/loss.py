@@ -143,55 +143,7 @@ class TaskAlignedAssigner(nn.Module):
 
 
 # ==========================================
-# 3. Custom Loss Functions
-# ==========================================
-
-def custom_ciou_loss(boxes1: torch.Tensor, boxes2: torch.Tensor, reduction: str = "none", eps: float = 1e-7) -> torch.Tensor:
-    """
-    Custom Complete IoU (CIoU) loss with an epsilon to prevent division by zero.
-    """
-    # Get the coordinates of bounding boxes
-    b1_x1, b1_y1, b1_x2, b1_y2 = boxes1.unbind(-1)
-    b2_x1, b2_y1, b2_x2, b2_y2 = boxes2.unbind(-1)
-    w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1
-    w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1
-
-    # Intersection area
-    inter = (torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) * \
-            (torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)).clamp(0)
-
-    # Union Area
-    union = w1 * h1 + w2 * h2 - inter + eps
-
-    # IoU
-    iou = inter / union
-
-    # Enclosing box
-    cw = torch.max(b1_x2, b2_x2) - torch.min(b1_x1, b2_x1)  # convex width
-    ch = torch.max(b1_y2, b2_y2) - torch.min(b1_y1, b2_y1)  # convex height
-    c2 = cw**2 + ch**2 + eps  # convex diagonal squared
-
-    # Center distance
-    rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2)**2 +
-            (b2_y1 + b2_y2 - b1_y1 - b1_y2)**2) / 4  # center distance squared
-
-    # Aspect ratio consistency
-    v = (4 / (torch.pi**2)) * torch.pow(torch.atan(w2 / (h2 + eps)) - torch.atan(w1 / (h1 + eps)), 2)
-    with torch.no_grad():
-        alpha = v / (v - iou + (1 + eps))
-    
-    # CIoU loss
-    loss = 1 - iou + (rho2 / c2) + (alpha * v)
-
-    if reduction == "sum":
-        return loss.sum()
-    elif reduction == "mean":
-        return loss.mean()
-    return loss
-
-
-# ==========================================
-# 4. Complete Loss Module
+# 3. Complete Loss Module
 # ==========================================
 
 class YOLODetectionLoss(nn.Module):
@@ -266,7 +218,7 @@ class YOLODetectionLoss(nn.Module):
         pos_target_bboxes = target_bboxes[fg_mask]
 
         if pos_pred_bboxes.shape[0] > 0:
-            loss_box = custom_ciou_loss(pos_pred_bboxes, pos_target_bboxes, reduction="sum")
+            loss_box = ops.complete_box_iou_loss(pos_pred_bboxes, pos_target_bboxes, reduction="sum")
         else:
             loss_box = torch.tensor(0.0, device=pred_scores.device)
 

@@ -82,22 +82,14 @@ class C3k(nn.Module):
         return self.m(x)
 
 
-class C3k2(nn.Module):
+class C3k2(C2f):
     """YOLO26 specialized CSP block (C3k2)."""
     def __init__(self, c1: int, c2: int, n: int = 1, c3k: bool = False, e: float = 0.5, shortcut: bool = True):
-        super().__init__()
-        self.c = int(c2 * e)
-        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
-        self.cv2 = Conv((2 + n) * self.c, c2, 1, 1)
+        super().__init__(c1, c2, n=n, shortcut=shortcut, e=e)
         self.m = nn.ModuleList(
             (C3k(self.c, n=2, shortcut=shortcut) if c3k else Bottleneck(self.c, self.c, shortcut=shortcut, e=1.0)) 
             for _ in range(n)
         )
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = list(self.cv1(x).chunk(2, 1))
-        y.extend(m(y[-1]) for m in self.m)
-        return self.cv2(torch.cat(y, 1))
 
 
 class SPPF(nn.Module):
@@ -215,11 +207,15 @@ class CrossAttention(nn.Module):
         return self.proj(y)
 
 
+# ==========================================
+# 2. Main Architecture Modules
+# ==========================================
 
-
-
-
-class BackBone(nn.Module):
+class YOLONanoBackbone(nn.Module):
+    """
+    Feature Extractor (Nano Scale). 
+    Processes images and extracts hierarchical spatial features.
+    """
     def __init__(self):
         super().__init__()
         # Nano scale channel dimensions
@@ -252,123 +248,66 @@ class BackBone(nn.Module):
             C2PSA(c5, c5, n=1)
         )
 
-        # Expose channel dims for downstream heads and the neck.
-        self.channels = {"p2": c3, "p3": c4, "p4": c4, "p5": c5}
+        # Expose final channel dims for the Neck to use
+        self.channels = {"p3": c4, "p4": c4, "p5": c5}
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        return_p2: bool = False,
-    ) -> tuple[torch.Tensor, ...]:
-        p2 = self.stage1(x)
-        p3 = self.stage2(p2)
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        x = self.stage1(x)
+        p3 = self.stage2(x)
         p4 = self.stage3(p3)
         p5 = self.stage4(p4)
-        if return_p2:
-            return p2, p3, p4, p5
         return p3, p4, p5
 
 
-
-# class Neck(nn.Module):
-#     """
-#     Feature Pyramid Network (FPN) & Path Aggregation Network (PAN).
-#     Fuses features from different backbone stages.
-#     """
-#     def __init__(self, in_channels: dict[str, int]):
-#         super().__init__()
-#         c3, c4, c5 = 64, 128, 256  # Hardcoded Nano channels (p3 actually outputs 128 channels in backbone)
-#         # Note: Backbone p3 outputs c4(128). We respect this flow.
-#         p3_ch, p4_ch, p5_ch = in_channels["p3"], in_channels["p4"], in_channels["p5"]
-
-#         self.up = nn.Upsample(scale_factor=2, mode="nearest")
-
-#         # --- Top-Down Pathway (FPN) ---
-#         self.fpn_p4 = C3k2(p5_ch + p4_ch, c4, n=1, c3k=True, e=0.5, shortcut=True)
-#         self.n4_attn = CrossAttention(qkv_dim=[c4, p3_ch, p3_ch], num_heads=max(c4 // 32, 1))
-        
-#         self.fpn_p3 = C3k2(c4 + p3_ch, c3, n=1, c3k=True, e=0.5, shortcut=True)
-
-#         # --- Bottom-Up Pathway (PAN) ---
-#         self.down_n3 = Conv(c3, c3, k=3, s=2)
-#         self.pan_n4 = C3k2(c3 + c4, c4, n=1, c3k=True, e=0.5, shortcut=True)
-
-#         self.down_n4 = Conv(c4, c4, k=3, s=2)
-#         self.pan_n5 = C3k2(c4 + p5_ch, c5, n=1, c3k=True, e=0.5, shortcut=True)
-#         self.n5_attn = CrossAttention(qkv_dim=[c5, p4_ch, p4_ch], num_heads=max(c5 // 32, 1))
-
-#         # Expose final channel dims for the Heads to use
-#         self.channels = {"n3": c3, "n4": c4, "n5": c5}
-
-#     def forward(self, p3: torch.Tensor, p4: torch.Tensor, p5: torch.Tensor):
-#         # Top-Down (FPN)
-#         n4 = self.fpn_p4(torch.cat([self.up(p5), p4], dim=1))
-#         n4 = n4 + self.n4_attn(n4, p3, p3)
-#         n3 = self.fpn_p3(torch.cat([self.up(n4), p3], dim=1))
-
-#         # Bottom-Up (PAN)
-#         n4_out = self.pan_n4(torch.cat([self.down_n3(n3), n4], dim=1))
-#         n5_out = self.pan_n5(torch.cat([self.down_n4(n4_out), p5], dim=1))
-#         n5_out = n5_out + self.n5_attn(n5_out, p4, p4)
-
-#         return n3, n4_out, n5_out
-
-
-class Neck(nn.Module):
+class YOLONeck(nn.Module):
+    """
+    Feature Pyramid Network (FPN) & Path Aggregation Network (PAN).
+    Fuses features from different backbone stages.
+    """
     def __init__(self, in_channels: dict[str, int]):
         super().__init__()
-        # Initialize the neck with the input channels from the backbone
-        self.in_channels = in_channels
+        c3, c4, c5 = 64, 128, 256  # Hardcoded Nano channels (p3 actually outputs 128 channels in backbone)
+        # Note: Backbone p3 outputs c4(128). We respect this flow.
         p3_ch, p4_ch, p5_ch = in_channels["p3"], in_channels["p4"], in_channels["p5"]
-        self.c3, self.c4, self.c5 = 64, 128, 256
 
-        self.up2 = nn.Upsample(scale_factor=2, mode="nearest")
-        self.up4 = nn.Upsample(scale_factor=4, mode="nearest")
-        self.down_1 = Conv(p3_ch, p3_ch, k=3, s=2)
-        self.down_2 = Conv(p3_ch, p3_ch, k=3, s=4)
-        self.down_3 = Conv(p4_ch, p4_ch, k=3, s=2)
+        self.up = nn.Upsample(scale_factor=2, mode="nearest")
 
-        self.n1_attn_34 = CrossAttention(qkv_dim=[p3_ch, p4_ch, p4_ch])
-        self.n1_attn_35 = CrossAttention(qkv_dim=[p3_ch, p5_ch, p5_ch])
-        self.n1_bn = nn.BatchNorm2d(p3_ch)
-        self.n1_fpn = C3k2(p3_ch + p4_ch + p5_ch, self.c3, n=1, c3k=True, e=0.5, shortcut=True)
+        # --- Top-Down Pathway (FPN) ---
+        self.fpn_p4 = C3k2(p5_ch + p4_ch, c4, n=1, c3k=True, e=0.5, shortcut=True)
+        self.n4_attn = CrossAttention(qkv_dim=[c4, p3_ch, p3_ch], num_heads=max(c4 // 32, 1))
         
+        self.fpn_p3 = C3k2(c4 + p3_ch, c3, n=1, c3k=True, e=0.5, shortcut=True)
 
-        self.n2_attn_43 = CrossAttention(qkv_dim=[p4_ch, p3_ch, p3_ch])
-        self.n2_attn_45 = CrossAttention(qkv_dim=[p4_ch, p5_ch, p5_ch])
-        self.n2_bn = nn.BatchNorm2d(p4_ch)
-        self.n2_fpn = C3k2(p4_ch + p3_ch + p5_ch, self.c4, n=1, c3k=True, e=0.5, shortcut=True)
-        
+        # --- Bottom-Up Pathway (PAN) ---
+        self.down_n3 = Conv(c3, c3, k=3, s=2)
+        self.pan_n4 = C3k2(c3 + c4, c4, n=1, c3k=True, e=0.5, shortcut=True)
 
-        self.n3_attn_53 = CrossAttention(qkv_dim=[p5_ch, p3_ch, p3_ch])
-        self.n3_attn_54 = CrossAttention(qkv_dim=[p5_ch, p4_ch, p4_ch])
-        self.n3_bn = nn.BatchNorm2d(p5_ch)
-        self.n3_fpn = C3k2(p5_ch + p3_ch + p4_ch, self.c5, n=1, c3k=True, e=0.5, shortcut=True)
+        self.down_n4 = Conv(c4, c4, k=3, s=2)
+        self.pan_n5 = C3k2(c4 + p5_ch, c5, n=1, c3k=True, e=0.5, shortcut=True)
+        self.n5_attn = CrossAttention(qkv_dim=[c5, p4_ch, p4_ch], num_heads=max(c5 // 32, 1))
 
-
+        # Expose final channel dims for the Heads to use
+        self.channels = {"n3": c3, "n4": c4, "n5": c5}
 
     def forward(self, p3: torch.Tensor, p4: torch.Tensor, p5: torch.Tensor):
-        # Implementation for the neck forward pass
-        n1 = self.n1_bn(p3 + self.n1_attn_35(self.n1_attn_34(p3, p4, p4), p5, p5))
-        n1 = self.n1_fpn(torch.cat([n1, self.up2(p4), self.up4(p5)], dim=1))
-        # print(f"n1 shape: {n1.shape}")  # Debug print
+        # Top-Down (FPN)
+        n4 = self.fpn_p4(torch.cat([self.up(p5), p4], dim=1))
+        n4 = self.n4_attn(n4, p3, p3)
+        n3 = self.fpn_p3(torch.cat([self.up(n4), p3], dim=1))
 
-        n2 = self.n2_bn(p4 + self.n2_attn_45(self.n2_attn_43(p4, p3, p3), p5, p5))
-        # print(f"n2 shape: {n2.shape}, down_1(p3) shape: {self.down_1(p3).shape}, up2(p5) shape: {self.up2(p5).shape}")  # Debug print
-        n2 = self.n2_fpn(torch.cat([n2, self.down_1(p3), self.up2(p5)], dim=1))
-        # print(f"n2 shape after FPN: {n2.shape}")  # Debug print
+        # Bottom-Up (PAN)
+        n4_out = self.pan_n4(torch.cat([self.down_n3(n3), n4], dim=1))
+        n5_out = self.pan_n5(torch.cat([self.down_n4(n4_out), p5], dim=1))
+        n5_out = self.n5_attn(n5_out, p4, p4)
 
-        n3 = self.n3_bn(p5 + self.n3_attn_54(self.n3_attn_53(p5, p3, p3), p4, p4))
-        # print(f"n3 shape before FPN: {n3.shape}, self.down_2(p3) shape: {self.down_2(p3).shape}, self.down_3(p4) shape: {self.down_3(p4).shape}")  # Debug print
-        n3 = self.n3_fpn(torch.cat([n3, self.down_2(p3), self.down_3(p4)], dim=1))
-        # print(f"n3 shape after FPN: {n3.shape}")  # Debug print
+        return n3, n4_out, n5_out
 
 
-        return n1, n2, n3
+# ==========================================
+# 3. Heads & Multi-Task Wrapper
+# ==========================================
 
-        
-
-class DetectionHead(nn.Module):
+class Detect(nn.Module):
     """Detection Head for Bounding Boxes and Classifications."""
     def __init__(self, nc: int, ch: tuple[int, int, int], reg_max: int = 1):
         super().__init__()
@@ -411,145 +350,119 @@ class DetectionHead(nn.Module):
 
 
 
-class ClsHead(nn.Module):
-    """Global Image Classification Head."""
-    def __init__(self, nc: int, in_ch: int):
-        super().__init__()
-        self.nc = nc
-        self.cls_head = nn.Sequential(
-            # 1. Process the spatial layout while it still exists
-            Conv(in_ch, 256, k=3, s=1),
-            Conv(256, 256, k=3, s=1),
-            
-            # 2. Now that we've learned complex spatial patterns, squash it
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
-            
-            # 3. Deeper fully connected network with stronger dropout
-            nn.Dropout(0.3), # Increased dropout to prevent overfitting this large head
-            nn.Linear(256, 128),
-            nn.LayerNorm(128),
-            nn.SiLU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, nc)
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.cls_head(x)
-        return x
-
-
-
-class SegHead(nn.Module):
-    def __init__(self, p2_ch: int, neck_ch: tuple[int, int, int], seg_ch: int = 64):
-        super().__init__()
-        self.p2_reduce = Conv(p2_ch, seg_ch, k=1, s=1)
-        self.neck_reduce = nn.ModuleList(Conv(ch, seg_ch, k=1, s=1) for ch in neck_ch)
-        self.seg_conv = nn.Sequential(
-            Conv(seg_ch * 4, seg_ch * 2, 3),
-            Conv(seg_ch * 2, seg_ch, k=3, s=1),
-            nn.Conv2d(seg_ch, 1, kernel_size=1)
-        )
-
-    def forward(
-        self,
-        p2: torch.Tensor,
-        neck_features: list[torch.Tensor],
-        output_size: tuple[int, int] | None = None,
-    ) -> torch.Tensor:
-        target_size = p2.shape[-2:]
-        p2_reduced = self.p2_reduce(p2)
-        resized_features = [
-            F.interpolate(reduce(feat), size=target_size, mode="nearest")
-            for reduce, feat in zip(self.neck_reduce, neck_features)
-        ]
-        fused = torch.cat([p2_reduced, *resized_features], dim=1)
-        mask_stride4 = self.seg_conv(fused)
-
-        if output_size is None:
-            output_size = (target_size[0] * 4, target_size[1] * 4)
-
-        return F.interpolate(mask_stride4, size=output_size, mode="bilinear", align_corners=False)
-
 
 
 class HandGestureMultiTask(nn.Module):
-    """Unified Multi-Task Model for Detection, Classification, and Segmentation."""
-    def __init__(self, num_classes: int, reg_max: int = 1):
+    """
+    Complete Multi-Task Architecture.
+    Combines Backbone, Neck, and individual heads (Detection, Classification, Segmentation).
+    """
+    def __init__(self, num_classes: int = 10, reg_max: int = 1):
         super().__init__()
-        self.backbone = BackBone()
-        self.neck = Neck(in_channels=self.backbone.channels)
-        neck_ch = (self.neck.c3, self.neck.c4, self.neck.c5)
-        self.detect = DetectionHead(nc=num_classes, ch=neck_ch, reg_max=reg_max)
-        self.cls_head = ClsHead(nc=num_classes, in_ch=neck_ch[2])  # Use the deepest neck feature for classification
-        self.seg_head = SegHead(p2_ch=self.backbone.channels["p2"], neck_ch=neck_ch)
-
-    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-        p2, p3, p4, p5 = self.backbone(x, return_p2=True)
-        n3, n4, n5 = self.neck(p3, p4, p5)
         
-        det_outputs = self.detect([n3, n4, n5])
-        cls_output = self.cls_head(n5)  # Use the deepest neck feature for classification
-        seg_output = self.seg_head(p2, [n3, n4, n5], output_size=x.shape[-2:])
+        # 1. Feature Extraction & Fusion
+        self.backbone = YOLONanoBackbone()
+        self.neck = YOLONeck(in_channels=self.backbone.channels)
+        
+        # 2. Detection Head (Operates on fused neck features N3, N4, N5)
+        neck_ch = (self.neck.channels["n3"], self.neck.channels["n4"], self.neck.channels["n5"])
+        self.detect = Detect(nc=num_classes, ch=neck_ch, reg_max=reg_max)
 
-        return {
-            "det": det_outputs,
-            "cls": cls_output,
-            "seg": seg_output
-        }
+        # 3. Classification Head (Operates on P5 backbone features for rich global semantics)
+        c5 = self.backbone.channels["p5"]
+        self.cls_head = nn.Sequential(
+            Conv(c5, 1280, k=1, s=1),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Dropout(0.2),
+            nn.Linear(1280, num_classes)
+        )
+
+        # 4. Segmentation Head (Operates on N3, N4, N5)
+        seg_ch = 128
+        self.seg_reduce3 = Conv(neck_ch[0], seg_ch, k=1)
+        self.seg_reduce4 = Conv(neck_ch[1], seg_ch, k=1)
+        self.seg_reduce5 = Conv(neck_ch[2], seg_ch, k=1)
+
+        self.seg_conv = nn.Sequential(
+            Conv(seg_ch * 3, 256, 3), 
+            Conv(256, 256, k=3, s=1),
+            Conv(256, 256, k=3, s=1),
+            nn.Conv2d(256, 1, kernel_size=1) 
+        )
+
+    def freeze_for_s2_training(self):
+        """Freezes the backbone for fine-tuning."""
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        for param in self.neck.parameters():
+            param.requires_grad = False
+        for param in self.detect.parameters():
+            param.requires_grad = False
+
+    def forward(self, x: torch.Tensor, tasks: tuple[str, ...] | None = None):
+        if tasks is None:
+            tasks = ("det", "cls", "seg")
+
+        # --- Feature Extraction ---
+        p3, p4, p5 = self.backbone(x)
+        n3, n4, n5 = self.neck(p3, p4, p5)
+
+        out: dict[str, torch.Tensor | object] = {}
+
+        # --- A. Detection Output ---
+        if "det" in tasks:
+            out["det"] = self.detect([n3, n4, n5])
+
+        # --- B. Classification Output ---
+        if "cls" in tasks:
+            out["cls"] = self.cls_head(n5)
+
+        # --- C. Segmentation Output ---
+        if "seg" in tasks:
+            target_size = n3.shape[-2:]
+            
+            # Reduce channels FIRST to save FLOPs, then upscale
+            n3_r = self.seg_reduce3(n3)
+            n4_r = F.interpolate(self.seg_reduce4(n4), size=target_size, mode="nearest")
+            n5_r = F.interpolate(self.seg_reduce5(n5), size=target_size, mode="nearest")
+            
+            fused = torch.cat([n3_r, n4_r, n5_r], dim=1)
+            mask_low_res = self.seg_conv(fused)
+            
+            out["seg"] = F.interpolate(mask_low_res, size=x.shape[-2:], mode="bilinear", align_corners=False)
+
+        return out
 
 
+# ==========================================
+# Execution Demo
+# ==========================================
+def _demo() -> None:
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
+    model = HandGestureMultiTask()
+    model.to(device)
+    model.eval()
 
+    try:
+        import torchinfo
+        torchinfo.summary(model, input_size=(1, 3, 480, 640), device=str(device), depth=4)
+    except ImportError:
+        print("torchinfo not installed. Skipping summary.")
+
+    x = torch.randn(1, 3, 480, 640, device=device)
+    with torch.no_grad():
+        preds = model(x)
+
+    print(f"Detection boxes shape: {preds['det']['boxes'].shape}")
+    print(f"Detection scores shape: {preds['det']['scores'].shape}")
+    print(f"Detection feats (N3, N4, N5): {[f.shape for f in preds['det']['feats']]}")
+    print(f"Classification output shape: {preds['cls'].shape}")
+    print(f"Segmentation mask shape: {preds['seg'].shape}")
 
 
 if __name__ == "__main__":
-
-    print("Testing BackBone with dummy input...")
-
-    # Create a dummy input tensor (batch_size=1, channels=3, height=480, width=640)
-    x = torch.randn(1, 3, 480, 640)
-    backbone = BackBone()
-    p2, p3, p4, p5 = backbone(x, return_p2=True)
-    print(f"P2 shape: {p2.shape}")  # Expected: [1, 64, 120, 160]
-    print(f"P3 shape: {p3.shape}")  # Expected: [1, 128, 60, 80]
-    print(f"P4 shape: {p4.shape}")  # Expected: [1, 128, 30, 40]
-    print(f"P5 shape: {p5.shape}")  # Expected: [1, 256, 15, 20]
-
-
-    # Test the Neck with the output from the Backbone
-    channels = backbone.channels
-    neck = Neck(in_channels=channels)
-    n1, n2, n3 = neck(p3, p4, p5)
-    print(f"N1 shape: {n1.shape}")  # Expected: [1, 64, 60, 80]
-    print(f"N2 shape: {n2.shape}")  # Expected: [1, 128, 30, 40]
-    print(f"N3 shape: {n3.shape}")  # Expected: [1, 256, 15, 20]
-
-
-    # Test the Detection Head with the output from the Neck
-    det_head = DetectionHead(nc=10, ch=(64, 128, 256), reg_max=1)
-    det_outputs = det_head([n1, n2, n3])
-    print(f"Boxes shape: {det_outputs['boxes'].shape}")  # Expected: [1, 4, 60*80 + 30*40 + 15*20]
-    print(f"Scores shape: {det_outputs['scores'].shape}")  # Expected: [1, 10, 60*80 + 30*40 + 15*20]
-
-
-    # Test the Classification Head with the output from the Neck
-    cls_head = ClsHead(nc=10, in_ch=256)
-    cls_output = cls_head(n3)
-    print(f"Classification output shape: {cls_output.shape}")  # Expected: [1, 10]
-
-    # Test the Segmentation Head with the output from the Neck
-    seg_head = SegHead(p2_ch=backbone.channels["p2"], neck_ch=(64, 128, 256))
-    seg_output = seg_head(p2, [n1, n2, n3], output_size=x.shape[-2:])
-    print(f"Segmentation output shape: {seg_output.shape}")  # Expected: [1, 1, 480, 640]
-
-
-    # Test the full multi-task model
-    print("Testing the full HandGestureMultiTask model with dummy input...")
-    multi_task_model = HandGestureMultiTask(num_classes=10, reg_max=1)
-    multi_task_outputs = multi_task_model(x)
-    print(f"Multi-task outputs shapes:")
-    for key, value in multi_task_outputs.items():
-        print(f"  {key}: {value.shape}")
-    
+    _demo()
