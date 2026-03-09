@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.ops as ops
-from model import RGB_V1
+from model import HandGestureMultiTask
 
 
 # ==========================================
@@ -283,7 +283,7 @@ class YOLODetectionLoss(nn.Module):
 
 if __name__ == "__main__":
     dummy_x = torch.randn(2, 3, 480, 640)
-    model = RGB_V1(num_classes=10)
+    model = HandGestureMultiTask(num_classes=10)
     with torch.no_grad():
         preds = model(dummy_x)
 

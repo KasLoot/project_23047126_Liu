@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 # Import your custom modules
 from dataloader import HandGestureDataset_v2, SegAugment_v2, detection_collate_fn, CLASS_ID_TO_NAME
-from model import RGB_V2
+from model import HandGestureMultiTask
 
 
 def compute_macro_f1(confusion_matrix: np.ndarray) -> float:
@@ -82,7 +82,7 @@ def finalize_segmentation_metrics(metric_sums: dict[str, float]) -> tuple[float,
     return mean_iou, dice, hand_iou, background_iou
 
 
-def set_stage2_train_mode(model: RGB_V2) -> None:
+def set_stage2_train_mode(model: HandGestureMultiTask) -> None:
     model.train()
     model.backbone.eval()
     model.neck.eval()
@@ -174,7 +174,7 @@ def train():
     weight_decay = 1e-2
 
     # Save directory for checkpoints
-    output_dir = "outputs/RGB_V2/s2/t1"
+    output_dir = "C_model/outputs/s2/test1"
     os.makedirs(output_dir, exist_ok=True)
     log_path = os.path.join(output_dir, "train_log.txt")
 
@@ -221,8 +221,8 @@ def train():
         # ==========================================
         # 3. Model & Loss & Optimizer Setup
         # ==========================================
-        model = RGB_V2(num_classes=num_classes, reg_max=1)
-        checkpoint_path = "outputs/RGB_V2/s1/t1/best_model.pth"
+        model = HandGestureMultiTask(num_classes=num_classes, reg_max=1)
+        checkpoint_path = "C_model/outputs/s1/test1/best_model.pth"
         if os.path.exists(checkpoint_path):
             model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
             log(f"Loaded weights from {checkpoint_path} for Stage 2 training.")

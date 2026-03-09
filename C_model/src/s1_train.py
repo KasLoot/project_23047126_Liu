@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 # Import your custom modules
 from dataloader import HandGestureDataset_v2, SegAugment_v2, detection_collate_fn
-from model import RGB_V1, RGB_V2
+from model import HandGestureMultiTask
 from loss import YOLODetectionLoss, generate_anchors, decode_predictions, cxcywh_to_xyxy
 
 
@@ -177,7 +177,7 @@ def train():
     weight_decay = 1e-2
 
     # Save directory for checkpoints
-    output_dir = "outputs/RGB_V2/s1/t1"
+    output_dir = "C_model/outputs/s1/test1"
     os.makedirs(output_dir, exist_ok=True)
     log_path = os.path.join(output_dir, "training_log.txt")
 
@@ -220,7 +220,7 @@ def train():
     # ==========================================
     # 3. Model & Loss & Optimizer Setup
     # ==========================================
-    model = RGB_V2(num_classes=num_classes, reg_max=1).to(device)
+    model = HandGestureMultiTask(num_classes=num_classes, reg_max=1).to(device)
     
     # Prior bias trick for stable initialization
     prior_prob = 0.01
@@ -348,7 +348,7 @@ def train():
         if val_metrics["loss"] < best_val_loss:
             best_val_loss = val_metrics["loss"]
             torch.save(model.state_dict(), f"{output_dir}/best_model.pth")
-            log_message(f"--> Saved new BEST model! (Val Loss: {best_val_loss:.4f})", log_path)
+            log_message(f"--> Saved new BEST model to {output_dir}/best_model.pth! (Val Loss: {best_val_loss:.4f})", log_path)
 
     log_message("Training finished.", log_path)
 
