@@ -168,6 +168,30 @@ def _save_stage2_plots(history: dict[str, list[float]], output_dir: str) -> None
     plt.savefig(os.path.join(output_dir, "cls_macro_f1.png"), dpi=150)
     plt.close()
 
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, history["train_det_acc_iou50"], label="Train Det@0.5")
+    plt.plot(epochs, history["val_det_acc_iou50"], label="Val Det@0.5")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Detection Accuracy @0.5 IoU")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "det_acc_iou50.png"), dpi=150)
+    plt.close()
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, history["train_mean_bbox_iou"], label="Train Mean BBox IoU")
+    plt.plot(epochs, history["val_mean_bbox_iou"], label="Val Mean BBox IoU")
+    plt.xlabel("Epoch")
+    plt.ylabel("IoU")
+    plt.title("Mean Bounding-Box IoU")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "mean_bbox_iou.png"), dpi=150)
+    plt.close()
+
 
 def _train_stage1(args: argparse.Namespace) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -353,102 +377,103 @@ def _train_stage2(args: argparse.Namespace) -> None:
         else:
             log(f"No Stage-1 checkpoint found at {stage1_weights_path}; starting Stage-2 from scratch.")
 
-        for param in model.backbone.parameters():
-            param.requires_grad = False
-        for param in model.neck.parameters():
-            param.requires_grad = False
-        for param in model.detect.parameters():
-            param.requires_grad = False
+        # REMOVED Parameter freezing logic to allow full joint training in Stage-2
 
         model = model.to(device)
         cls_loss_fn = torch.nn.CrossEntropyLoss()
         seg_loss_fn = torch.nn.BCEWithLogitsLoss()
-        optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+        det_criterion = YOLODetectionLoss(num_classes=args.num_classes).to(device)
+
+        # Optimize ALL parameters
+        optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
         history: dict[str, list[float]] = {
-            "train_loss": [],
-            "val_loss": [],
-            "train_miou": [],
-            "val_miou": [],
-            "train_hand_iou": [],
-            "train_background_iou": [],
-            "val_hand_iou": [],
-            "val_background_iou": [],
-            "train_dice": [],
-            "val_dice": [],
-            "train_acc": [],
-            "val_acc": [],
-            "train_macro_f1": [],
-            "val_macro_f1": [],
+            "train_loss": [], "val_loss": [],
+            "train_miou": [], "val_miou": [],
+            "train_hand_iou": [], "train_background_iou": [],
+            "val_hand_iou": [], "val_background_iou": [],
+            "train_dice": [], "val_dice": [],
+            "train_acc": [], "val_acc": [],
+            "train_macro_f1": [], "val_macro_f1": [],
+            "train_det_acc_iou50": [], "val_det_acc_iou50": [],
+            "train_mean_bbox_iou": [], "val_mean_bbox_iou": [],
         }
 
-        best_selection = (-1.0, -1.0, float("-inf"))
         best_val_loss = float("inf")
         class_names = [CLASS_ID_TO_NAME[i] for i in range(args.num_classes)]
 
         for epoch in range(args.epochs):
             model.train()
-            model.backbone.eval()
-            model.neck.eval()
-            model.detect.eval()
 
             total_loss = 0.0
             train_cls_correct = 0
             train_cls_total = 0
+            train_det_iou_sum = 0.0
+            train_det_iou50_correct = 0
+
             train_confusion_matrix = np.zeros((args.num_classes, args.num_classes), dtype=np.int64)
             train_seg_sums = {
-                "hand_intersection": 0.0,
-                "hand_union": 0.0,
-                "background_intersection": 0.0,
-                "background_union": 0.0,
-                "pred_hand_pixels": 0.0,
-                "gt_hand_pixels": 0.0,
+                "hand_intersection": 0.0, "hand_union": 0.0,
+                "background_intersection": 0.0, "background_union": 0.0,
+                "pred_hand_pixels": 0.0, "gt_hand_pixels": 0.0,
             }
 
             for images, masks, class_ids, gt_bboxes in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{args.epochs} [Train]"):
                 images = images.to(device)
                 masks = masks.to(device).float()
                 class_ids = class_ids.to(device)
+                gt_bboxes = gt_bboxes.to(device)
 
                 optimizer.zero_grad()
                 outputs = model(images)
-                cls_outputs = outputs["cls"]
-                seg_outputs = outputs["seg"]
-
-                cls_loss = cls_loss_fn(cls_outputs, class_ids)
-                seg_loss = seg_loss_fn(seg_outputs, masks)
-                loss = cls_loss + seg_loss
+                
+                # Calculate joint loss
+                cls_loss = cls_loss_fn(outputs["cls"], class_ids)
+                seg_loss = seg_loss_fn(outputs["seg"], masks)
+                det_loss, _ = det_criterion(outputs["det"], gt_bboxes, class_ids)
+                
+                loss = cls_loss + seg_loss + det_loss
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
                 optimizer.step()
                 total_loss += loss.item()
 
-                train_preds = cls_outputs.argmax(dim=1)
+                # Classification Metrics
+                train_preds = outputs["cls"].argmax(dim=1)
                 train_cls_correct += (train_preds == class_ids).sum().item()
                 train_cls_total += class_ids.size(0)
                 for true_id, pred_id in zip(class_ids.detach().cpu().tolist(), train_preds.detach().cpu().tolist()):
                     train_confusion_matrix[int(true_id), int(pred_id)] += 1
 
-                train_batch_seg = summarize_segmentation_metrics(seg_outputs, masks)
+                # Detection Metrics
+                batch_det_iou_sum, batch_det_iou50_correct = update_detection_metrics(outputs["det"], gt_bboxes)
+                train_det_iou_sum += batch_det_iou_sum
+                train_det_iou50_correct += batch_det_iou50_correct
+
+                # Segmentation Metrics
+                train_batch_seg = summarize_segmentation_metrics(outputs["seg"], masks)
                 for key, value in train_batch_seg.items():
                     train_seg_sums[key] += value
 
             avg_train_loss = total_loss / max(len(train_loader), 1)
             train_acc = train_cls_correct / train_cls_total if train_cls_total > 0 else 0.0
             train_macro_f1 = compute_macro_f1(train_confusion_matrix)
+            train_det_acc_iou50 = train_det_iou50_correct / train_cls_total if train_cls_total > 0 else 0.0
+            train_mean_bbox_iou = train_det_iou_sum / train_cls_total if train_cls_total > 0 else 0.0
             train_miou, train_dice, train_hand_iou, train_background_iou = finalize_segmentation_metrics(train_seg_sums)
 
             model.eval()
             val_total_loss = 0.0
             val_cls_correct = 0
             val_cls_total = 0
+            val_det_iou_sum = 0.0
+            val_det_iou50_correct = 0
+
             val_confusion_matrix = np.zeros((args.num_classes, args.num_classes), dtype=np.int64)
             val_seg_sums = {
-                "hand_intersection": 0.0,
-                "hand_union": 0.0,
-                "background_intersection": 0.0,
-                "background_union": 0.0,
-                "pred_hand_pixels": 0.0,
-                "gt_hand_pixels": 0.0,
+                "hand_intersection": 0.0, "hand_union": 0.0,
+                "background_intersection": 0.0, "background_union": 0.0,
+                "pred_hand_pixels": 0.0, "gt_hand_pixels": 0.0,
             }
 
             with torch.no_grad():
@@ -456,29 +481,40 @@ def _train_stage2(args: argparse.Namespace) -> None:
                     images = images.to(device)
                     masks = masks.to(device).float()
                     class_ids = class_ids.to(device)
+                    gt_bboxes = gt_bboxes.to(device)
 
                     outputs = model(images)
-                    cls_outputs = outputs["cls"]
-                    seg_outputs = outputs["seg"]
-
-                    cls_loss = cls_loss_fn(cls_outputs, class_ids)
-                    seg_loss = seg_loss_fn(seg_outputs, masks)
-                    loss = cls_loss + seg_loss
+                    
+                    # Calculate joint loss
+                    cls_loss = cls_loss_fn(outputs["cls"], class_ids)
+                    seg_loss = seg_loss_fn(outputs["seg"], masks)
+                    det_loss, _ = det_criterion(outputs["det"], gt_bboxes, class_ids)
+                    
+                    loss = cls_loss + seg_loss + det_loss
                     val_total_loss += loss.item()
 
-                    val_preds = cls_outputs.argmax(dim=1)
+                    # Classification Metrics
+                    val_preds = outputs["cls"].argmax(dim=1)
                     val_cls_correct += (val_preds == class_ids).sum().item()
                     val_cls_total += class_ids.size(0)
                     for true_id, pred_id in zip(class_ids.detach().cpu().tolist(), val_preds.detach().cpu().tolist()):
                         val_confusion_matrix[int(true_id), int(pred_id)] += 1
 
-                    val_batch_seg = summarize_segmentation_metrics(seg_outputs, masks)
+                    # Detection Metrics
+                    batch_det_iou_sum, batch_det_iou50_correct = update_detection_metrics(outputs["det"], gt_bboxes)
+                    val_det_iou_sum += batch_det_iou_sum
+                    val_det_iou50_correct += batch_det_iou50_correct
+
+                    # Segmentation Metrics
+                    val_batch_seg = summarize_segmentation_metrics(outputs["seg"], masks)
                     for key, value in val_batch_seg.items():
                         val_seg_sums[key] += value
 
             avg_val_loss = val_total_loss / max(len(val_loader), 1)
             val_acc = val_cls_correct / val_cls_total if val_cls_total > 0 else 0.0
             val_macro_f1 = compute_macro_f1(val_confusion_matrix)
+            val_det_acc_iou50 = val_det_iou50_correct / val_cls_total if val_cls_total > 0 else 0.0
+            val_mean_bbox_iou = val_det_iou_sum / val_cls_total if val_cls_total > 0 else 0.0
             val_miou, val_dice, val_hand_iou, val_background_iou = finalize_segmentation_metrics(val_seg_sums)
 
             history["train_loss"].append(avg_train_loss)
@@ -495,6 +531,10 @@ def _train_stage2(args: argparse.Namespace) -> None:
             history["val_acc"].append(val_acc)
             history["train_macro_f1"].append(train_macro_f1)
             history["val_macro_f1"].append(val_macro_f1)
+            history["train_det_acc_iou50"].append(train_det_acc_iou50)
+            history["val_det_acc_iou50"].append(val_det_acc_iou50)
+            history["train_mean_bbox_iou"].append(train_mean_bbox_iou)
+            history["val_mean_bbox_iou"].append(val_mean_bbox_iou)
 
             _save_stage2_plots(history, out_dir)
             save_json(history, os.path.join(out_dir, "metrics_history.json"))
@@ -502,8 +542,8 @@ def _train_stage2(args: argparse.Namespace) -> None:
             log(
                 f"Epoch {epoch + 1}/{args.epochs} | "
                 f"Train Loss={avg_train_loss:.4f} Val Loss={avg_val_loss:.4f} | "
-                f"Train Acc={train_acc:.4f} Val Acc={val_acc:.4f} | "
-                f"Train Macro-F1={train_macro_f1:.4f} Val Macro-F1={val_macro_f1:.4f}"
+                f"Train ClsAcc={train_acc:.4f} Val ClsAcc={val_acc:.4f} | "
+                f"Train Det@0.5={train_det_acc_iou50:.4f} Val Det@0.5={val_det_acc_iou50:.4f}"
             )
             log(
                 f"Train Seg mIoU={train_miou:.4f} (hand={train_hand_iou:.4f}, background={train_background_iou:.4f}) | "
@@ -515,10 +555,7 @@ def _train_stage2(args: argparse.Namespace) -> None:
             )
 
             torch.save(model.state_dict(), checkpoint_paths["s2_last"])
-            # current_selection = (val_macro_f1, val_dice, -avg_val_loss)
-            # if current_selection > best_selection:
-            if avg_val_loss < best_val_loss:  # Prioritize lowest validation loss for best model selection
-                # best_selection = current_selection
+            if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
                 torch.save(model.state_dict(), checkpoint_paths["s2_best"])
                 log(
