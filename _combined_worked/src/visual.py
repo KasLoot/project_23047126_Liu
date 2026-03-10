@@ -157,7 +157,7 @@ def _save_demo_prediction_figure(sample: dict, save_path: str) -> None:
     plt.close(fig)
 
 @torch.no_grad()
-def evaluate_and_visualize(weights_path: str = "outputs/RGB_V2/s2/t1/best_model.pth", 
+def evaluate_and_visualize(weights_path: str = "_combined_worked/outputs/RGB_V1/s2/t1/best_model.pth", 
                            val_dir: str = "dataset/dataset_v1/test",
                            num_visualize: int = 10,
                            num_speed_warmup_batches: int = 5):
@@ -173,7 +173,7 @@ def evaluate_and_visualize(weights_path: str = "outputs/RGB_V2/s2/t1/best_model.
     try:
         # 1. Setup Model & Dataset
         input_size = (480, 640)
-        model = RGB_V2(num_classes=10, reg_max=1).to(device)
+        model = RGB_V1(num_classes=10, reg_max=1).to(device)
         
         if os.path.exists(weights_path):
             model.load_state_dict(torch.load(weights_path, map_location=device))

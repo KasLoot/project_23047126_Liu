@@ -141,12 +141,12 @@ def train():
 
         # --- Save Checkpoints ---
         # Save last model
-        torch.save(model.state_dict(), "weights/last_model.pth")
+        torch.save(model.state_dict(), "weights/B_model_last_model.pth")
         
         # Save best model
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), "weights/best_model.pth")
+            torch.save(model.state_dict(), "weights/B_model_best_model.pth")
             print(f"--> Saved new BEST model! (Val Loss: {best_val_loss:.4f})")
 
 if __name__ == "__main__":

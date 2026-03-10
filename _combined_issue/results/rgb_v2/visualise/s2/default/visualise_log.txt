@@ -1,0 +1,14 @@
+Model: rgb_v2
+Stage: s2
+Loaded weights: weights/rgb_v2/s2/default/best_model.pth
+Rank 01 | Sample 0681 | Cls true=stop pred=stop (0.93) | Det pred=stop (0.80) | IoU=0.95 | Seg mIoU=0.99 | Dice=0.99
+Rank 02 | Sample 0690 | Cls true=stop pred=stop (0.65) | Det pred=stop (0.76) | IoU=0.94 | Seg mIoU=0.99 | Dice=0.99
+Rank 03 | Sample 0687 | Cls true=stop pred=stop (0.98) | Det pred=stop (0.87) | IoU=0.96 | Seg mIoU=0.99 | Dice=0.99
+Rank 04 | Sample 0679 | Cls true=stop pred=stop (0.62) | Det pred=stop (0.68) | IoU=0.95 | Seg mIoU=0.99 | Dice=0.99
+Rank 05 | Sample 0684 | Cls true=stop pred=stop (0.52) | Det pred=stop (0.67) | IoU=0.94 | Seg mIoU=0.99 | Dice=0.99
+Rank 06 | Sample 0688 | Cls true=stop pred=stop (0.98) | Det pred=stop (0.87) | IoU=0.94 | Seg mIoU=0.99 | Dice=0.99
+Rank 07 | Sample 0680 | Cls true=stop pred=stop (0.78) | Det pred=stop (0.73) | IoU=0.94 | Seg mIoU=0.99 | Dice=0.99
+Rank 08 | Sample 2750 | Cls true=like pred=like (0.41) | Det pred=like (0.70) | IoU=0.88 | Seg mIoU=0.99 | Dice=0.99
+Rank 09 | Sample 2752 | Cls true=like pred=like (0.50) | Det pred=like (0.75) | IoU=0.88 | Seg mIoU=0.99 | Dice=0.99
+Rank 10 | Sample 2749 | Cls true=like pred=like (0.35) | Det pred=like (0.74) | IoU=0.86 | Seg mIoU=0.99 | Dice=0.99
+Saved 10 visualisations to results/rgb_v2/visualise/s2/default

@@ -141,7 +141,7 @@ def train():
     # 3. Model & Loss & Optimizer Setup
     # ==========================================
     model = HandGestureMultiTask(num_classes=num_classes, reg_max=1)
-    checkpoint_path = "weights/best_model.pth"
+    checkpoint_path = "weights/B_model_best_model.pth"
     if os.path.exists(checkpoint_path):
         model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
         print(f"Loaded weights from {checkpoint_path} for Stage 2 training.")
