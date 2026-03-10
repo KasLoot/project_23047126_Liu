@@ -1,0 +1,73 @@
+Using device: cuda
+Loaded Stage-1 weights from weights/rgb_v2/s1/default/best_model.pth
+Epoch 1/20 | Train Loss=1.2078 Val Loss=0.5074 | Train Acc=0.6267 Val Acc=0.8300 | Train Macro-F1=0.6234 Val Macro-F1=0.8273
+Train Seg mIoU=0.7498 (hand=0.5215, background=0.9782) | Train Dice=0.6855
+Val Seg mIoU=0.9190 (hand=0.8425, background=0.9955) | Val Dice=0.9145
+Saved new best Stage-2 model (macro_f1=0.8273, dice=0.9145, val_loss=0.5074)
+Epoch 2/20 | Train Loss=0.5567 Val Loss=0.4296 | Train Acc=0.8242 Val Acc=0.8533 | Train Macro-F1=0.8227 Val Macro-F1=0.8534
+Train Seg mIoU=0.9173 (hand=0.8393, background=0.9954) | Train Dice=0.9126
+Val Seg mIoU=0.9341 (hand=0.8718, background=0.9963) | Val Dice=0.9315
+Saved new best Stage-2 model (macro_f1=0.8534, dice=0.9315, val_loss=0.4296)
+Epoch 3/20 | Train Loss=0.3809 Val Loss=0.2017 | Train Acc=0.8875 Val Acc=0.9467 | Train Macro-F1=0.8873 Val Macro-F1=0.9467
+Train Seg mIoU=0.9301 (hand=0.8641, background=0.9961) | Train Dice=0.9271
+Val Seg mIoU=0.9448 (hand=0.8926, background=0.9970) | Val Dice=0.9433
+Saved new best Stage-2 model (macro_f1=0.9467, dice=0.9433, val_loss=0.2017)
+Epoch 4/20 | Train Loss=0.3309 Val Loss=0.2402 | Train Acc=0.8983 Val Acc=0.9267 | Train Macro-F1=0.8985 Val Macro-F1=0.9263
+Train Seg mIoU=0.9362 (hand=0.8760, background=0.9965) | Train Dice=0.9339
+Val Seg mIoU=0.9493 (hand=0.9013, background=0.9973) | Val Dice=0.9481
+Epoch 5/20 | Train Loss=0.3268 Val Loss=0.2149 | Train Acc=0.8996 Val Acc=0.9200 | Train Macro-F1=0.8995 Val Macro-F1=0.9203
+Train Seg mIoU=0.9407 (hand=0.8847, background=0.9967) | Train Dice=0.9388
+Val Seg mIoU=0.9477 (hand=0.8981, background=0.9972) | Val Dice=0.9463
+Epoch 6/20 | Train Loss=0.3030 Val Loss=0.2047 | Train Acc=0.9054 Val Acc=0.9300 | Train Macro-F1=0.9055 Val Macro-F1=0.9308
+Train Seg mIoU=0.9437 (hand=0.8906, background=0.9969) | Train Dice=0.9421
+Val Seg mIoU=0.9524 (hand=0.9073, background=0.9975) | Val Dice=0.9514
+Epoch 7/20 | Train Loss=0.2472 Val Loss=0.3395 | Train Acc=0.9292 Val Acc=0.8933 | Train Macro-F1=0.9291 Val Macro-F1=0.8937
+Train Seg mIoU=0.9460 (hand=0.8949, background=0.9970) | Train Dice=0.9445
+Val Seg mIoU=0.9530 (hand=0.9086, background=0.9975) | Val Dice=0.9521
+Epoch 8/20 | Train Loss=0.2285 Val Loss=0.2245 | Train Acc=0.9342 Val Acc=0.9467 | Train Macro-F1=0.9342 Val Macro-F1=0.9475
+Train Seg mIoU=0.9485 (hand=0.8998, background=0.9972) | Train Dice=0.9473
+Val Seg mIoU=0.9559 (hand=0.9141, background=0.9976) | Val Dice=0.9551
+Epoch 9/20 | Train Loss=0.2469 Val Loss=0.1977 | Train Acc=0.9267 Val Acc=0.9500 | Train Macro-F1=0.9266 Val Macro-F1=0.9506
+Train Seg mIoU=0.9498 (hand=0.9024, background=0.9973) | Train Dice=0.9487
+Val Seg mIoU=0.9584 (hand=0.9191, background=0.9978) | Val Dice=0.9578
+Saved new best Stage-2 model (macro_f1=0.9506, dice=0.9578, val_loss=0.1977)
+Epoch 10/20 | Train Loss=0.2382 Val Loss=0.1804 | Train Acc=0.9313 Val Acc=0.9333 | Train Macro-F1=0.9312 Val Macro-F1=0.9327
+Train Seg mIoU=0.9503 (hand=0.9033, background=0.9973) | Train Dice=0.9492
+Val Seg mIoU=0.9605 (hand=0.9232, background=0.9979) | Val Dice=0.9601
+Saved new best Stage-2 model (macro_f1=0.9327, dice=0.9601, val_loss=0.1804)
+Epoch 11/20 | Train Loss=0.2274 Val Loss=0.1729 | Train Acc=0.9367 Val Acc=0.9467 | Train Macro-F1=0.9367 Val Macro-F1=0.9465
+Train Seg mIoU=0.9522 (hand=0.9069, background=0.9974) | Train Dice=0.9512
+Val Seg mIoU=0.9597 (hand=0.9215, background=0.9979) | Val Dice=0.9592
+Saved new best Stage-2 model (macro_f1=0.9465, dice=0.9592, val_loss=0.1729)
+Epoch 12/20 | Train Loss=0.2345 Val Loss=0.1572 | Train Acc=0.9383 Val Acc=0.9533 | Train Macro-F1=0.9384 Val Macro-F1=0.9533
+Train Seg mIoU=0.9513 (hand=0.9052, background=0.9973) | Train Dice=0.9502
+Val Seg mIoU=0.9532 (hand=0.9089, background=0.9975) | Val Dice=0.9523
+Saved new best Stage-2 model (macro_f1=0.9533, dice=0.9523, val_loss=0.1572)
+Epoch 13/20 | Train Loss=0.2317 Val Loss=0.2206 | Train Acc=0.9342 Val Acc=0.9267 | Train Macro-F1=0.9342 Val Macro-F1=0.9261
+Train Seg mIoU=0.9518 (hand=0.9062, background=0.9974) | Train Dice=0.9508
+Val Seg mIoU=0.9620 (hand=0.9260, background=0.9980) | Val Dice=0.9616
+Epoch 14/20 | Train Loss=0.1900 Val Loss=0.1759 | Train Acc=0.9437 Val Acc=0.9333 | Train Macro-F1=0.9438 Val Macro-F1=0.9330
+Train Seg mIoU=0.9542 (hand=0.9109, background=0.9975) | Train Dice=0.9534
+Val Seg mIoU=0.9634 (hand=0.9287, background=0.9980) | Val Dice=0.9630
+Epoch 15/20 | Train Loss=0.2003 Val Loss=0.2199 | Train Acc=0.9437 Val Acc=0.9233 | Train Macro-F1=0.9438 Val Macro-F1=0.9228
+Train Seg mIoU=0.9515 (hand=0.9057, background=0.9974) | Train Dice=0.9505
+Val Seg mIoU=0.9618 (hand=0.9255, background=0.9980) | Val Dice=0.9613
+Epoch 16/20 | Train Loss=0.2038 Val Loss=0.1410 | Train Acc=0.9408 Val Acc=0.9567 | Train Macro-F1=0.9408 Val Macro-F1=0.9564
+Train Seg mIoU=0.9562 (hand=0.9148, background=0.9976) | Train Dice=0.9555
+Val Seg mIoU=0.9613 (hand=0.9247, background=0.9979) | Val Dice=0.9609
+Saved new best Stage-2 model (macro_f1=0.9564, dice=0.9609, val_loss=0.1410)
+Epoch 17/20 | Train Loss=0.1937 Val Loss=0.1751 | Train Acc=0.9429 Val Acc=0.9400 | Train Macro-F1=0.9429 Val Macro-F1=0.9404
+Train Seg mIoU=0.9547 (hand=0.9119, background=0.9975) | Train Dice=0.9539
+Val Seg mIoU=0.9646 (hand=0.9311, background=0.9981) | Val Dice=0.9643
+Epoch 18/20 | Train Loss=0.2197 Val Loss=0.1517 | Train Acc=0.9371 Val Acc=0.9533 | Train Macro-F1=0.9371 Val Macro-F1=0.9529
+Train Seg mIoU=0.9563 (hand=0.9151, background=0.9976) | Train Dice=0.9556
+Val Seg mIoU=0.9657 (hand=0.9333, background=0.9982) | Val Dice=0.9655
+Epoch 19/20 | Train Loss=0.1744 Val Loss=0.1953 | Train Acc=0.9492 Val Acc=0.9300 | Train Macro-F1=0.9492 Val Macro-F1=0.9293
+Train Seg mIoU=0.9574 (hand=0.9170, background=0.9977) | Train Dice=0.9567
+Val Seg mIoU=0.9632 (hand=0.9283, background=0.9980) | Val Dice=0.9628
+Epoch 20/20 | Train Loss=0.2009 Val Loss=0.1151 | Train Acc=0.9392 Val Acc=0.9600 | Train Macro-F1=0.9392 Val Macro-F1=0.9601
+Train Seg mIoU=0.9578 (hand=0.9178, background=0.9977) | Train Dice=0.9572
+Val Seg mIoU=0.9589 (hand=0.9201, background=0.9978) | Val Dice=0.9584
+Saved new best Stage-2 model (macro_f1=0.9601, dice=0.9584, val_loss=0.1151)
+
+Class Names: call, dislike, like, ok, one, palm, peace, rock, stop, three

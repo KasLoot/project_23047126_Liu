@@ -228,7 +228,6 @@ def train():
             log(f"Loaded weights from {checkpoint_path} for Stage 2 training.")
         else:
             log(f"No checkpoint found at {checkpoint_path}. Starting Stage 2 training from scratch.")
-        # model.freeze_for_s2_training()  # Freeze backbone and detection head for Stage 2 training
         for param in model.backbone.parameters():
             param.requires_grad = False
         for param in model.neck.parameters():

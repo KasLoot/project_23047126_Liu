@@ -283,7 +283,7 @@ def _bbox_cxcywh_to_xyxy(bbox: torch.Tensor):
 
 def visualize_augmented_samples(
     root_dir: str,
-    out_dir: str = "results/visualise/augmented_data",
+    out_dir: str = "outputs/test_data",
     num_samples: int = 8,
     seed: int = 0,
     out_size: Tuple[int, int] = (256, 256),
@@ -387,7 +387,7 @@ if __name__ == "__main__":
         required=True,
         help="Dataset folder containing image_tensors/, mask_tensors/, image_info.json",
     )
-    parser.add_argument("--out_dir", type=str, default="results/visualise/augmented_data", help="Where to save PNGs")
+    parser.add_argument("--out_dir", type=str, default="outputs/test_data", help="Where to save PNGs")
     parser.add_argument("--num_samples", type=int, default=8, help="How many samples to save")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument(

@@ -1,0 +1,21 @@
+{
+  "model": "rgb_v2",
+  "dataset": "dataset/dataset_v1/test",
+  "weights": "weights/rgb_v2/s2/default/best_model.pth",
+  "total_samples": 3450,
+  "image_classifier_top1_percent": 88.78260869565217,
+  "classification_macro_f1": 0.8905991694963502,
+  "detector_class_top1_percent": 89.65217391304347,
+  "detection_acc_iou50_percent": 93.3913043478261,
+  "mean_bbox_iou": 0.863746382823025,
+  "segmentation_miou": 0.863667617217662,
+  "segmentation_hand_iou": 0.7365160237705529,
+  "segmentation_background_iou": 0.9908192106647712,
+  "segmentation_dice": 0.8482686179553149,
+  "speed_throughput_fps": 477.11568903282495,
+  "speed_avg_image_latency_ms": 2.0959277235823643,
+  "speed_avg_batch_latency_ms": 16.737970813620286,
+  "speed_warmup_batches": 5,
+  "speed_measured_batches": 427,
+  "speed_measured_images": 3410
+}

@@ -1,0 +1,86 @@
+Using device: cuda
+Epoch 1/50 | Train Loss=1.9980 Val Loss=1.4827 | Train Det@0.5=22.54% Val Det@0.5=63.67% | Train IoU=0.2155 Val IoU=0.5188 | Train Top1=10.46% Val Top1=12.00% | Train F1=0.0866 Val F1=0.0738
+Saved new best Stage-1 model (Val Loss: 1.4827)
+Epoch 2/50 | Train Loss=1.3654 Val Loss=1.2759 | Train Det@0.5=64.46% Val Det@0.5=55.33% | Train IoU=0.5048 Val IoU=0.4800 | Train Top1=10.00% Val Top1=13.00% | Train F1=0.0794 Val F1=0.0983
+Saved new best Stage-1 model (Val Loss: 1.2759)
+Epoch 3/50 | Train Loss=1.1492 Val Loss=1.0126 | Train Det@0.5=77.21% Val Det@0.5=83.67% | Train IoU=0.5812 Val IoU=0.6246 | Train Top1=10.67% Val Top1=10.67% | Train F1=0.0816 Val F1=0.0711
+Saved new best Stage-1 model (Val Loss: 1.0126)
+Epoch 4/50 | Train Loss=1.0081 Val Loss=0.8937 | Train Det@0.5=83.75% Val Det@0.5=92.67% | Train IoU=0.6417 Val IoU=0.7176 | Train Top1=11.12% Val Top1=13.33% | Train F1=0.0937 Val F1=0.0975
+Saved new best Stage-1 model (Val Loss: 0.8937)
+Epoch 5/50 | Train Loss=0.9388 Val Loss=0.8826 | Train Det@0.5=85.58% Val Det@0.5=92.33% | Train IoU=0.6658 Val IoU=0.7104 | Train Top1=10.17% Val Top1=12.67% | Train F1=0.0887 Val F1=0.0926
+Saved new best Stage-1 model (Val Loss: 0.8826)
+Epoch 6/50 | Train Loss=0.8857 Val Loss=0.7903 | Train Det@0.5=89.04% Val Det@0.5=91.67% | Train IoU=0.6893 Val IoU=0.7057 | Train Top1=10.29% Val Top1=12.00% | Train F1=0.0888 Val F1=0.0672
+Saved new best Stage-1 model (Val Loss: 0.7903)
+Epoch 7/50 | Train Loss=0.8361 Val Loss=0.7394 | Train Det@0.5=89.96% Val Det@0.5=97.33% | Train IoU=0.7087 Val IoU=0.7787 | Train Top1=10.62% Val Top1=13.33% | Train F1=0.0903 Val F1=0.0803
+Saved new best Stage-1 model (Val Loss: 0.7394)
+Epoch 8/50 | Train Loss=0.8185 Val Loss=0.7725 | Train Det@0.5=90.25% Val Det@0.5=96.33% | Train IoU=0.7096 Val IoU=0.7630 | Train Top1=10.50% Val Top1=8.67% | Train F1=0.0893 Val F1=0.0455
+Epoch 9/50 | Train Loss=0.7716 Val Loss=0.6697 | Train Det@0.5=90.83% Val Det@0.5=97.00% | Train IoU=0.7293 Val IoU=0.8060 | Train Top1=9.62% Val Top1=11.00% | Train F1=0.0830 Val F1=0.0634
+Saved new best Stage-1 model (Val Loss: 0.6697)
+Epoch 10/50 | Train Loss=0.7458 Val Loss=0.6560 | Train Det@0.5=92.92% Val Det@0.5=95.00% | Train IoU=0.7449 Val IoU=0.7890 | Train Top1=10.12% Val Top1=9.00% | Train F1=0.0847 Val F1=0.0611
+Saved new best Stage-1 model (Val Loss: 0.6560)
+Epoch 11/50 | Train Loss=0.7121 Val Loss=0.6460 | Train Det@0.5=93.33% Val Det@0.5=98.33% | Train IoU=0.7629 Val IoU=0.8138 | Train Top1=11.46% Val Top1=10.00% | Train F1=0.0970 Val F1=0.0626
+Saved new best Stage-1 model (Val Loss: 0.6460)
+Epoch 12/50 | Train Loss=0.6952 Val Loss=0.5964 | Train Det@0.5=93.75% Val Det@0.5=96.67% | Train IoU=0.7687 Val IoU=0.8075 | Train Top1=11.46% Val Top1=7.67% | Train F1=0.0984 Val F1=0.0392
+Saved new best Stage-1 model (Val Loss: 0.5964)
+Epoch 13/50 | Train Loss=0.6591 Val Loss=0.5708 | Train Det@0.5=94.79% Val Det@0.5=98.00% | Train IoU=0.7842 Val IoU=0.8306 | Train Top1=10.00% Val Top1=8.33% | Train F1=0.0847 Val F1=0.0505
+Saved new best Stage-1 model (Val Loss: 0.5708)
+Epoch 14/50 | Train Loss=0.6471 Val Loss=0.5661 | Train Det@0.5=94.79% Val Det@0.5=99.00% | Train IoU=0.7871 Val IoU=0.8487 | Train Top1=10.29% Val Top1=10.33% | Train F1=0.0850 Val F1=0.0736
+Saved new best Stage-1 model (Val Loss: 0.5661)
+Epoch 15/50 | Train Loss=0.6269 Val Loss=0.5623 | Train Det@0.5=95.38% Val Det@0.5=98.00% | Train IoU=0.7997 Val IoU=0.8119 | Train Top1=10.33% Val Top1=11.67% | Train F1=0.0865 Val F1=0.0642
+Saved new best Stage-1 model (Val Loss: 0.5623)
+Epoch 16/50 | Train Loss=0.5965 Val Loss=0.5286 | Train Det@0.5=95.71% Val Det@0.5=99.00% | Train IoU=0.8102 Val IoU=0.8544 | Train Top1=10.67% Val Top1=10.00% | Train F1=0.0883 Val F1=0.0556
+Saved new best Stage-1 model (Val Loss: 0.5286)
+Epoch 17/50 | Train Loss=0.5731 Val Loss=0.4904 | Train Det@0.5=96.71% Val Det@0.5=99.67% | Train IoU=0.8265 Val IoU=0.8683 | Train Top1=10.71% Val Top1=9.67% | Train F1=0.0874 Val F1=0.0709
+Saved new best Stage-1 model (Val Loss: 0.4904)
+Epoch 18/50 | Train Loss=0.5547 Val Loss=0.4817 | Train Det@0.5=96.50% Val Det@0.5=100.00% | Train IoU=0.8269 Val IoU=0.8754 | Train Top1=10.83% Val Top1=9.00% | Train F1=0.0875 Val F1=0.0434
+Saved new best Stage-1 model (Val Loss: 0.4817)
+Epoch 19/50 | Train Loss=0.5372 Val Loss=0.5849 | Train Det@0.5=97.12% Val Det@0.5=97.33% | Train IoU=0.8379 Val IoU=0.8330 | Train Top1=9.25% Val Top1=8.67% | Train F1=0.0814 Val F1=0.0504
+Epoch 20/50 | Train Loss=0.5308 Val Loss=0.4577 | Train Det@0.5=97.00% Val Det@0.5=99.00% | Train IoU=0.8356 Val IoU=0.8619 | Train Top1=9.75% Val Top1=7.67% | Train F1=0.0842 Val F1=0.0598
+Saved new best Stage-1 model (Val Loss: 0.4577)
+Epoch 21/50 | Train Loss=0.5010 Val Loss=0.4452 | Train Det@0.5=97.33% Val Det@0.5=99.67% | Train IoU=0.8491 Val IoU=0.8869 | Train Top1=9.50% Val Top1=10.67% | Train F1=0.0801 Val F1=0.0898
+Saved new best Stage-1 model (Val Loss: 0.4452)
+Epoch 22/50 | Train Loss=0.4912 Val Loss=0.4376 | Train Det@0.5=97.25% Val Det@0.5=99.00% | Train IoU=0.8520 Val IoU=0.8675 | Train Top1=9.88% Val Top1=10.33% | Train F1=0.0846 Val F1=0.0724
+Saved new best Stage-1 model (Val Loss: 0.4376)
+Epoch 23/50 | Train Loss=0.4676 Val Loss=0.4296 | Train Det@0.5=98.17% Val Det@0.5=99.00% | Train IoU=0.8640 Val IoU=0.8753 | Train Top1=10.17% Val Top1=6.00% | Train F1=0.0902 Val F1=0.0337
+Saved new best Stage-1 model (Val Loss: 0.4296)
+Epoch 24/50 | Train Loss=0.4676 Val Loss=0.4198 | Train Det@0.5=97.83% Val Det@0.5=99.33% | Train IoU=0.8618 Val IoU=0.8885 | Train Top1=9.12% Val Top1=5.67% | Train F1=0.0791 Val F1=0.0352
+Saved new best Stage-1 model (Val Loss: 0.4198)
+Epoch 25/50 | Train Loss=0.4487 Val Loss=0.3507 | Train Det@0.5=97.96% Val Det@0.5=100.00% | Train IoU=0.8652 Val IoU=0.8988 | Train Top1=10.00% Val Top1=9.00% | Train F1=0.0880 Val F1=0.0600
+Saved new best Stage-1 model (Val Loss: 0.3507)
+Epoch 26/50 | Train Loss=0.4254 Val Loss=0.4197 | Train Det@0.5=98.46% Val Det@0.5=99.33% | Train IoU=0.8776 Val IoU=0.8920 | Train Top1=10.83% Val Top1=12.67% | Train F1=0.0910 Val F1=0.0911
+Epoch 27/50 | Train Loss=0.4237 Val Loss=0.3637 | Train Det@0.5=98.58% Val Det@0.5=100.00% | Train IoU=0.8774 Val IoU=0.9020 | Train Top1=9.88% Val Top1=10.67% | Train F1=0.0837 Val F1=0.0745
+Epoch 28/50 | Train Loss=0.4166 Val Loss=0.3859 | Train Det@0.5=98.17% Val Det@0.5=99.67% | Train IoU=0.8768 Val IoU=0.8916 | Train Top1=9.71% Val Top1=9.67% | Train F1=0.0855 Val F1=0.0623
+Epoch 29/50 | Train Loss=0.3997 Val Loss=0.4081 | Train Det@0.5=98.88% Val Det@0.5=100.00% | Train IoU=0.8858 Val IoU=0.8920 | Train Top1=9.92% Val Top1=9.33% | Train F1=0.0864 Val F1=0.0606
+Epoch 30/50 | Train Loss=0.3865 Val Loss=0.3316 | Train Det@0.5=98.92% Val Det@0.5=100.00% | Train IoU=0.8887 Val IoU=0.9114 | Train Top1=9.71% Val Top1=7.33% | Train F1=0.0802 Val F1=0.0335
+Saved new best Stage-1 model (Val Loss: 0.3316)
+Epoch 31/50 | Train Loss=0.3724 Val Loss=0.3475 | Train Det@0.5=98.83% Val Det@0.5=100.00% | Train IoU=0.8925 Val IoU=0.9080 | Train Top1=10.04% Val Top1=8.33% | Train F1=0.0837 Val F1=0.0582
+Epoch 32/50 | Train Loss=0.3606 Val Loss=0.3000 | Train Det@0.5=99.17% Val Det@0.5=100.00% | Train IoU=0.8988 Val IoU=0.9177 | Train Top1=8.96% Val Top1=12.00% | Train F1=0.0768 Val F1=0.0888
+Saved new best Stage-1 model (Val Loss: 0.3000)
+Epoch 33/50 | Train Loss=0.3462 Val Loss=0.2995 | Train Det@0.5=98.83% Val Det@0.5=100.00% | Train IoU=0.8990 Val IoU=0.9222 | Train Top1=11.46% Val Top1=10.67% | Train F1=0.0979 Val F1=0.0708
+Saved new best Stage-1 model (Val Loss: 0.2995)
+Epoch 34/50 | Train Loss=0.3383 Val Loss=0.3044 | Train Det@0.5=99.25% Val Det@0.5=100.00% | Train IoU=0.9039 Val IoU=0.9212 | Train Top1=11.75% Val Top1=10.00% | Train F1=0.0970 Val F1=0.0611
+Epoch 35/50 | Train Loss=0.3259 Val Loss=0.2615 | Train Det@0.5=99.08% Val Det@0.5=100.00% | Train IoU=0.9062 Val IoU=0.9268 | Train Top1=10.38% Val Top1=12.00% | Train F1=0.0897 Val F1=0.0808
+Saved new best Stage-1 model (Val Loss: 0.2615)
+Epoch 36/50 | Train Loss=0.3158 Val Loss=0.2644 | Train Det@0.5=99.29% Val Det@0.5=99.67% | Train IoU=0.9088 Val IoU=0.9302 | Train Top1=11.12% Val Top1=10.00% | Train F1=0.0987 Val F1=0.0690
+Epoch 37/50 | Train Loss=0.2950 Val Loss=0.2536 | Train Det@0.5=99.50% Val Det@0.5=100.00% | Train IoU=0.9156 Val IoU=0.9267 | Train Top1=10.25% Val Top1=9.33% | Train F1=0.0875 Val F1=0.0648
+Saved new best Stage-1 model (Val Loss: 0.2536)
+Epoch 38/50 | Train Loss=0.2829 Val Loss=0.2562 | Train Det@0.5=99.50% Val Det@0.5=100.00% | Train IoU=0.9183 Val IoU=0.9317 | Train Top1=10.29% Val Top1=10.67% | Train F1=0.0840 Val F1=0.0712
+Epoch 39/50 | Train Loss=0.2792 Val Loss=0.2228 | Train Det@0.5=99.46% Val Det@0.5=100.00% | Train IoU=0.9184 Val IoU=0.9345 | Train Top1=11.29% Val Top1=10.33% | Train F1=0.0963 Val F1=0.0700
+Saved new best Stage-1 model (Val Loss: 0.2228)
+Epoch 40/50 | Train Loss=0.2653 Val Loss=0.2211 | Train Det@0.5=99.42% Val Det@0.5=100.00% | Train IoU=0.9221 Val IoU=0.9367 | Train Top1=10.38% Val Top1=11.00% | Train F1=0.0894 Val F1=0.0769
+Saved new best Stage-1 model (Val Loss: 0.2211)
+Epoch 41/50 | Train Loss=0.2595 Val Loss=0.2321 | Train Det@0.5=99.62% Val Det@0.5=99.67% | Train IoU=0.9269 Val IoU=0.9331 | Train Top1=10.21% Val Top1=10.00% | Train F1=0.0889 Val F1=0.0698
+Epoch 42/50 | Train Loss=0.2480 Val Loss=0.2291 | Train Det@0.5=99.58% Val Det@0.5=100.00% | Train IoU=0.9274 Val IoU=0.9359 | Train Top1=10.58% Val Top1=9.33% | Train F1=0.0903 Val F1=0.0667
+Epoch 43/50 | Train Loss=0.2428 Val Loss=0.2075 | Train Det@0.5=99.58% Val Det@0.5=100.00% | Train IoU=0.9288 Val IoU=0.9385 | Train Top1=10.83% Val Top1=10.33% | Train F1=0.0934 Val F1=0.0717
+Saved new best Stage-1 model (Val Loss: 0.2075)
+Epoch 44/50 | Train Loss=0.2345 Val Loss=0.2125 | Train Det@0.5=99.54% Val Det@0.5=100.00% | Train IoU=0.9308 Val IoU=0.9376 | Train Top1=11.21% Val Top1=9.33% | Train F1=0.0973 Val F1=0.0598
+Epoch 45/50 | Train Loss=0.2290 Val Loss=0.2036 | Train Det@0.5=99.71% Val Det@0.5=100.00% | Train IoU=0.9327 Val IoU=0.9414 | Train Top1=10.58% Val Top1=10.67% | Train F1=0.0896 Val F1=0.0680
+Saved new best Stage-1 model (Val Loss: 0.2036)
+Epoch 46/50 | Train Loss=0.2202 Val Loss=0.2036 | Train Det@0.5=99.58% Val Det@0.5=100.00% | Train IoU=0.9344 Val IoU=0.9399 | Train Top1=11.92% Val Top1=10.33% | Train F1=0.1025 Val F1=0.0699
+Saved new best Stage-1 model (Val Loss: 0.2036)
+Epoch 47/50 | Train Loss=0.2170 Val Loss=0.1993 | Train Det@0.5=99.62% Val Det@0.5=100.00% | Train IoU=0.9358 Val IoU=0.9412 | Train Top1=10.88% Val Top1=10.33% | Train F1=0.0906 Val F1=0.0712
+Saved new best Stage-1 model (Val Loss: 0.1993)
+Epoch 48/50 | Train Loss=0.2126 Val Loss=0.1964 | Train Det@0.5=99.62% Val Det@0.5=100.00% | Train IoU=0.9374 Val IoU=0.9430 | Train Top1=11.17% Val Top1=9.67% | Train F1=0.0953 Val F1=0.0614
+Saved new best Stage-1 model (Val Loss: 0.1964)
+Epoch 49/50 | Train Loss=0.2120 Val Loss=0.1993 | Train Det@0.5=99.71% Val Det@0.5=100.00% | Train IoU=0.9377 Val IoU=0.9422 | Train Top1=10.75% Val Top1=10.33% | Train F1=0.0901 Val F1=0.0713
+Epoch 50/50 | Train Loss=0.2126 Val Loss=0.1981 | Train Det@0.5=99.62% Val Det@0.5=100.00% | Train IoU=0.9376 Val IoU=0.9422 | Train Top1=9.71% Val Top1=10.33% | Train F1=0.0827 Val F1=0.0714
