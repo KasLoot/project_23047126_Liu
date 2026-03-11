@@ -1,0 +1,21 @@
+{
+  "model": "rgb_attention",
+  "dataset": "dataset/dataset_v1/test",
+  "weights": "weights/rgb_attention/s2/default/best_model.pth",
+  "total_samples": 3450,
+  "image_classifier_top1_percent": 78.23188405797102,
+  "classification_macro_f1": 0.7859898111012683,
+  "detector_class_top1_percent": 79.15942028985508,
+  "detection_acc_iou50_percent": 90.05797101449275,
+  "mean_bbox_iou": 0.765055537102609,
+  "segmentation_miou": 0.8498774472139903,
+  "segmentation_hand_iou": 0.7096715744916685,
+  "segmentation_background_iou": 0.9900833199363122,
+  "segmentation_dice": 0.8301846800051911,
+  "speed_throughput_fps": 622.7805742856921,
+  "speed_avg_image_latency_ms": 1.6057019780152353,
+  "speed_avg_batch_latency_ms": 12.823053267053753,
+  "speed_warmup_batches": 5,
+  "speed_measured_batches": 427,
+  "speed_measured_images": 3410
+}
