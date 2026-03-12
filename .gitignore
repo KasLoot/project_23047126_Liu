@@ -2,6 +2,7 @@
 .vscode/
 
 dataset/
+dataset_old/
 
 **/__pycache__/
 

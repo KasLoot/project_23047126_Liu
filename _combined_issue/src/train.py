@@ -60,6 +60,37 @@ def _checkpoint_paths(model_name: str, weights_dir: str, run_name: str) -> dict[
     }
 
 
+def _build_stage2_scheduler(
+    optimizer: optim.Optimizer,
+    args: argparse.Namespace,
+    steps_per_epoch: int,
+) -> tuple[optim.lr_scheduler.LRScheduler | None, bool]:
+    if args.stage2_scheduler == "none":
+        return None, False
+    if args.stage2_scheduler == "onecycle":
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=args.lr,
+            epochs=args.epochs,
+            steps_per_epoch=steps_per_epoch,
+        )
+        return scheduler, True
+    if args.stage2_scheduler == "steplr":
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size=max(args.stage2_step_size, 1),
+            gamma=args.stage2_gamma,
+        )
+        return scheduler, False
+
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=max(args.epochs, 1),
+        eta_min=args.min_lr,
+    )
+    return scheduler, False
+
+
 def _save_stage1_plots(history: dict, out_dir: str) -> None:
     metrics = [
         ("loss", "Loss", "loss_curve.png"),
@@ -363,6 +394,9 @@ def _train_stage2(args: argparse.Namespace) -> None:
         train_loader = _build_loader(train_dataset, args.batch_size, True, args.num_workers, train_drop_last)
         val_loader = _build_loader(val_dataset, args.batch_size, False, args.num_workers, False)
 
+        if len(train_loader) == 0:
+            raise ValueError("Training loader is empty. Reduce batch size or check dataset path.")
+
         model = _build_model(args.model, num_classes=args.num_classes, reg_max=1)
         stage1_weights_path = args.stage1_weights
         if stage1_weights_path is None:
@@ -377,7 +411,14 @@ def _train_stage2(args: argparse.Namespace) -> None:
         else:
             log(f"No Stage-1 checkpoint found at {stage1_weights_path}; starting Stage-2 from scratch.")
 
-        # REMOVED Parameter freezing logic to allow full joint training in Stage-2
+        # Freeze backbone, neck, and detection head; only train classification and segmentation heads
+        # for param in model.backbone.parameters():
+        #     param.requires_grad = False
+        # for param in model.neck.parameters():
+        #     param.requires_grad = False
+        # for param in model.detect.parameters():
+        #     param.requires_grad = False
+        # print("Frozen backbone, neck, and detection head parameters.")
 
         model = model.to(device)
         cls_loss_fn = torch.nn.CrossEntropyLoss()
@@ -386,6 +427,8 @@ def _train_stage2(args: argparse.Namespace) -> None:
 
         # Optimize ALL parameters
         optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        scheduler, scheduler_step_per_batch = _build_stage2_scheduler(optimizer, args, len(train_loader))
+        log(f"Stage-2 scheduler: {args.stage2_scheduler}")
 
         history: dict[str, list[float]] = {
             "train_loss": [], "val_loss": [],
@@ -432,10 +475,12 @@ def _train_stage2(args: argparse.Namespace) -> None:
                 seg_loss = seg_loss_fn(outputs["seg"], masks)
                 det_loss, _ = det_criterion(outputs["det"], gt_bboxes, class_ids)
                 
-                loss = cls_loss + seg_loss + det_loss
+                loss = cls_loss + 2.5*seg_loss + 0.5*det_loss
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
                 optimizer.step()
+                if scheduler is not None and scheduler_step_per_batch:
+                    scheduler.step()
                 total_loss += loss.item()
 
                 # Classification Metrics
@@ -461,6 +506,10 @@ def _train_stage2(args: argparse.Namespace) -> None:
             train_det_acc_iou50 = train_det_iou50_correct / train_cls_total if train_cls_total > 0 else 0.0
             train_mean_bbox_iou = train_det_iou_sum / train_cls_total if train_cls_total > 0 else 0.0
             train_miou, train_dice, train_hand_iou, train_background_iou = finalize_segmentation_metrics(train_seg_sums)
+
+            if scheduler is not None and not scheduler_step_per_batch:
+                scheduler.step()
+            current_lr = optimizer.param_groups[0]["lr"]
 
             model.eval()
             val_total_loss = 0.0
@@ -543,7 +592,8 @@ def _train_stage2(args: argparse.Namespace) -> None:
                 f"Epoch {epoch + 1}/{args.epochs} | "
                 f"Train Loss={avg_train_loss:.4f} Val Loss={avg_val_loss:.4f} | "
                 f"Train ClsAcc={train_acc:.4f} Val ClsAcc={val_acc:.4f} | "
-                f"Train Det@0.5={train_det_acc_iou50:.4f} Val Det@0.5={val_det_acc_iou50:.4f}"
+                f"Train Det@0.5={train_det_acc_iou50:.4f} Val Det@0.5={val_det_acc_iou50:.4f} | "
+                # f"LR={current_lr:.6e}"
             )
             log(
                 f"Train Seg mIoU={train_miou:.4f} (hand={train_hand_iou:.4f}, background={train_background_iou:.4f}) | "
@@ -588,6 +638,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weights_dir", type=str, default="weights")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument("--stage1_weights", type=str, default=None, help="Optional Stage-1 checkpoint path for Stage-2")
+    parser.add_argument(
+        "--stage2_scheduler",
+        type=str,
+        choices=["none", "cosine", "steplr", "onecycle"],
+        default="cosine",
+        help="Learning-rate scheduler for Stage-2 training",
+    )
+    parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum LR for cosine scheduler")
+    parser.add_argument("--stage2_step_size", type=int, default=5, help="Step size for StepLR in Stage-2")
+    parser.add_argument("--stage2_gamma", type=float, default=0.5, help="Gamma for StepLR in Stage-2")
 
     args = parser.parse_args()
     if args.batch_size is None:

@@ -1,0 +1,31 @@
+Using device: cuda
+Model: rgb_v1
+Stage: s2
+Loaded weights: _combined_issue/weights/rgb_v1/s2/lr5e4_sche_freeze/best_model.pth
+Evaluating: dataset/dataset_v1/test
+----------------------------------------
+EVALUATION RESULTS
+----------------------------------------
+Total Samples Tested : 3450
+Image Classifier Top-1: 89.04%
+Classification Macro F1: 0.8942
+Confusion Matrix (rows=true, cols=pred):
+true\pred         call    dislike       like         ok        one       palm      peace       rock       stop      three
+call               308         21          3          1          2          0          0          2          0          8
+dislike             17        312          0          0         15          0          0          1          0          0
+like                 0         31        292          2          5          0          0         12          3          0
+ok                   2         28          0        296          0          7          0          1          0         11
+one                  0         30          5          0        294          0          5          1         10          0
+palm                 0         15          0         21          0        309          0          0          0          0
+peace                0         15          0          0          1          0        310          4          0         15
+rock                18         16          0          0          2          0          1        306          0          2
+stop                 0         15          0          4          0          0          0          3        322          1
+three                0         15          0          1          0          0          6          0          0        323
+Detector Class Top-1 : 87.94%
+Detection Acc@IoU0.5 : 91.74%
+Mean Bounding Box IoU: 0.8424
+Segmentation mIoU    : 0.8263 (hand=0.6652, background=0.9873)
+Segmentation Dice    : 0.7990
+Inference Speed      : 629.12 img/s | 1.59 ms/img | 12.69 ms/batch
+Confusion matrix saved to _combined_issue/results/rgb_v1/eval/s2/lr5e4_sche_freeze/classification_confusion_matrix.png
+Metrics JSON saved to _combined_issue/results/rgb_v1/eval/s2/lr5e4_sche_freeze/metrics.json

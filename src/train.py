@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataloader import CLASS_ID_TO_NAME, HandGestureDataset_v2, SegAugment_v2, detection_collate_fn
-from model import RGB_Base, RGB_Dynamic, RGB_Attention
+from model import RGB_V1, RGB_V2
 from utils import (
     YOLODetectionLoss,
     build_logger,
@@ -44,14 +44,9 @@ def _build_loader(dataset, batch_size: int, shuffle: bool, num_workers: int, dro
 
 
 def _build_model(model_name: str, num_classes: int, reg_max: int = 1):
-    if model_name == "rgb_base":
-        return RGB_Base(num_classes=num_classes, reg_max=reg_max)
-    elif model_name == "rgb_dynamic":
-        return RGB_Dynamic(num_classes=num_classes, reg_max=reg_max)
-    elif model_name == "rgb_attention":
-        return RGB_Attention(num_classes=num_classes, reg_max=reg_max)
-    else:
-        raise ValueError(f"Unknown model architecture: {model_name}")
+    if model_name == "rgb_v1":
+        return RGB_V1(num_classes=num_classes, reg_max=reg_max)
+    return RGB_V2(num_classes=num_classes, reg_max=reg_max)
 
 
 def _checkpoint_paths(model_name: str, weights_dir: str, run_name: str) -> dict[str, str]:
@@ -63,6 +58,37 @@ def _checkpoint_paths(model_name: str, weights_dir: str, run_name: str) -> dict[
         "s2_best": os.path.join(s2_dir, "best_model.pth"),
         "s2_last": os.path.join(s2_dir, "last_model.pth"),
     }
+
+
+def _build_stage2_scheduler(
+    optimizer: optim.Optimizer,
+    args: argparse.Namespace,
+    steps_per_epoch: int,
+) -> tuple[optim.lr_scheduler.LRScheduler | None, bool]:
+    if args.stage2_scheduler == "none":
+        return None, False
+    if args.stage2_scheduler == "onecycle":
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=args.lr,
+            epochs=args.epochs,
+            steps_per_epoch=steps_per_epoch,
+        )
+        return scheduler, True
+    if args.stage2_scheduler == "steplr":
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size=max(args.stage2_step_size, 1),
+            gamma=args.stage2_gamma,
+        )
+        return scheduler, False
+
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=max(args.epochs, 1),
+        eta_min=args.min_lr,
+    )
+    return scheduler, False
 
 
 def _save_stage1_plots(history: dict, out_dir: str) -> None:
@@ -202,6 +228,7 @@ def _train_stage1(args: argparse.Namespace) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weights_dir, results_dir = ensure_project_dirs(args.weights_dir, args.results_dir)
     checkpoint_paths = _checkpoint_paths(args.model, weights_dir, args.run_name)
+    print(f"Stage-1 checkpoint paths: {checkpoint_paths}")
     out_dir = ensure_dir(os.path.join(results_dir, args.model, "train", "s1", args.run_name))
     log, close_log = build_logger(os.path.join(out_dir, "training_log.txt"), mode="w")
 
@@ -229,6 +256,11 @@ def _train_stage1(args: argparse.Namespace) -> None:
             raise ValueError("Training loader is empty. Reduce batch size or check dataset path.")
 
         model = _build_model(args.model, num_classes=args.num_classes, reg_max=1).to(device)
+
+        # prior_prob = 0.01
+        # bias_value = -math.log((1 - prior_prob) / prior_prob)
+        # for branch in model.detect.cls_branches:
+        #     torch.nn.init.constant_(branch[-1].bias, bias_value)
 
         criterion = YOLODetectionLoss(num_classes=args.num_classes).to(device)
         optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -325,8 +357,8 @@ def _train_stage1(args: argparse.Namespace) -> None:
                 f"Train Loss={train_metrics['loss']:.4f} Val Loss={val_metrics['loss']:.4f} | "
                 f"Train Det@0.5={train_metrics['det_acc_iou50'] * 100:.2f}% Val Det@0.5={val_metrics['det_acc_iou50'] * 100:.2f}% | "
                 f"Train IoU={train_metrics['mean_bbox_iou']:.4f} Val IoU={val_metrics['mean_bbox_iou']:.4f} | "
-                f"Train Top1={train_metrics['top1_acc'] * 100:.2f}% Val Top1={val_metrics['top1_acc'] * 100:.2f}% | "
-                f"Train F1={train_metrics['macro_f1']:.4f} Val F1={val_metrics['macro_f1']:.4f}"
+                # f"Train Top1={train_metrics['top1_acc'] * 100:.2f}% Val Top1={val_metrics['top1_acc'] * 100:.2f}% | "
+                # f"Train F1={train_metrics['macro_f1']:.4f} Val F1={val_metrics['macro_f1']:.4f}"
             )
 
             torch.save(model.state_dict(), checkpoint_paths["s1_last"])
@@ -363,23 +395,41 @@ def _train_stage2(args: argparse.Namespace) -> None:
         train_loader = _build_loader(train_dataset, args.batch_size, True, args.num_workers, train_drop_last)
         val_loader = _build_loader(val_dataset, args.batch_size, False, args.num_workers, False)
 
+        if len(train_loader) == 0:
+            raise ValueError("Training loader is empty. Reduce batch size or check dataset path.")
+
         model = _build_model(args.model, num_classes=args.num_classes, reg_max=1)
         stage1_weights_path = args.stage1_weights
         if stage1_weights_path is None:
             stage1_weights_path = checkpoint_paths["s1_best"]
-
+            if not os.path.exists(stage1_weights_path):
+                legacy_path = os.path.join(weights_dir, f"{args.model}_s1_best_model.pth")
+                if os.path.exists(legacy_path):
+                    stage1_weights_path = legacy_path
         if os.path.exists(stage1_weights_path):
             model.load_state_dict(torch.load(stage1_weights_path, map_location=device, weights_only=True))
             log(f"Loaded Stage-1 weights from {stage1_weights_path}")
         else:
             log(f"No Stage-1 checkpoint found at {stage1_weights_path}; starting Stage-2 from scratch.")
 
+        # Freeze backbone, neck, and detection head; only train classification and segmentation heads
+        # for param in model.backbone.parameters():
+        #     param.requires_grad = False
+        # for param in model.neck.parameters():
+        #     param.requires_grad = False
+        # for param in model.detect.parameters():
+        #     param.requires_grad = False
+        # print("Frozen backbone, neck, and detection head parameters.")
+
         model = model.to(device)
         cls_loss_fn = torch.nn.CrossEntropyLoss()
         seg_loss_fn = torch.nn.BCEWithLogitsLoss()
         det_criterion = YOLODetectionLoss(num_classes=args.num_classes).to(device)
 
+        # Optimize ALL parameters
         optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        scheduler, scheduler_step_per_batch = _build_stage2_scheduler(optimizer, args, len(train_loader))
+        log(f"Stage-2 scheduler: {args.stage2_scheduler}")
 
         history: dict[str, list[float]] = {
             "train_loss": [], "val_loss": [],
@@ -421,26 +471,32 @@ def _train_stage2(args: argparse.Namespace) -> None:
                 optimizer.zero_grad()
                 outputs = model(images)
                 
+                # Calculate joint loss
                 cls_loss = cls_loss_fn(outputs["cls"], class_ids)
                 seg_loss = seg_loss_fn(outputs["seg"], masks)
                 det_loss, _ = det_criterion(outputs["det"], gt_bboxes, class_ids)
                 
-                loss = cls_loss + seg_loss + det_loss
+                loss = cls_loss + 2.5*seg_loss + 0.5*det_loss
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
                 optimizer.step()
+                if scheduler is not None and scheduler_step_per_batch:
+                    scheduler.step()
                 total_loss += loss.item()
 
+                # Classification Metrics
                 train_preds = outputs["cls"].argmax(dim=1)
                 train_cls_correct += (train_preds == class_ids).sum().item()
                 train_cls_total += class_ids.size(0)
                 for true_id, pred_id in zip(class_ids.detach().cpu().tolist(), train_preds.detach().cpu().tolist()):
                     train_confusion_matrix[int(true_id), int(pred_id)] += 1
 
+                # Detection Metrics
                 batch_det_iou_sum, batch_det_iou50_correct = update_detection_metrics(outputs["det"], gt_bboxes)
                 train_det_iou_sum += batch_det_iou_sum
                 train_det_iou50_correct += batch_det_iou50_correct
 
+                # Segmentation Metrics
                 train_batch_seg = summarize_segmentation_metrics(outputs["seg"], masks)
                 for key, value in train_batch_seg.items():
                     train_seg_sums[key] += value
@@ -451,6 +507,10 @@ def _train_stage2(args: argparse.Namespace) -> None:
             train_det_acc_iou50 = train_det_iou50_correct / train_cls_total if train_cls_total > 0 else 0.0
             train_mean_bbox_iou = train_det_iou_sum / train_cls_total if train_cls_total > 0 else 0.0
             train_miou, train_dice, train_hand_iou, train_background_iou = finalize_segmentation_metrics(train_seg_sums)
+
+            if scheduler is not None and not scheduler_step_per_batch:
+                scheduler.step()
+            current_lr = optimizer.param_groups[0]["lr"]
 
             model.eval()
             val_total_loss = 0.0
@@ -475,6 +535,7 @@ def _train_stage2(args: argparse.Namespace) -> None:
 
                     outputs = model(images)
                     
+                    # Calculate joint loss
                     cls_loss = cls_loss_fn(outputs["cls"], class_ids)
                     seg_loss = seg_loss_fn(outputs["seg"], masks)
                     det_loss, _ = det_criterion(outputs["det"], gt_bboxes, class_ids)
@@ -482,16 +543,19 @@ def _train_stage2(args: argparse.Namespace) -> None:
                     loss = cls_loss + seg_loss + det_loss
                     val_total_loss += loss.item()
 
+                    # Classification Metrics
                     val_preds = outputs["cls"].argmax(dim=1)
                     val_cls_correct += (val_preds == class_ids).sum().item()
                     val_cls_total += class_ids.size(0)
                     for true_id, pred_id in zip(class_ids.detach().cpu().tolist(), val_preds.detach().cpu().tolist()):
                         val_confusion_matrix[int(true_id), int(pred_id)] += 1
 
+                    # Detection Metrics
                     batch_det_iou_sum, batch_det_iou50_correct = update_detection_metrics(outputs["det"], gt_bboxes)
                     val_det_iou_sum += batch_det_iou_sum
                     val_det_iou50_correct += batch_det_iou50_correct
 
+                    # Segmentation Metrics
                     val_batch_seg = summarize_segmentation_metrics(outputs["seg"], masks)
                     for key, value in val_batch_seg.items():
                         val_seg_sums[key] += value
@@ -529,7 +593,8 @@ def _train_stage2(args: argparse.Namespace) -> None:
                 f"Epoch {epoch + 1}/{args.epochs} | "
                 f"Train Loss={avg_train_loss:.4f} Val Loss={avg_val_loss:.4f} | "
                 f"Train ClsAcc={train_acc:.4f} Val ClsAcc={val_acc:.4f} | "
-                f"Train Det@0.5={train_det_acc_iou50:.4f} Val Det@0.5={val_det_acc_iou50:.4f}"
+                f"Train Det@0.5={train_det_acc_iou50:.4f} Val Det@0.5={val_det_acc_iou50:.4f} | "
+                # f"LR={current_lr:.6e}"
             )
             log(
                 f"Train Seg mIoU={train_miou:.4f} (hand={train_hand_iou:.4f}, background={train_background_iou:.4f}) | "
@@ -558,13 +623,13 @@ def _train_stage2(args: argparse.Namespace) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Unified training script for Stage-1 and Stage-2")
     parser.add_argument("--stage", type=str, choices=["s1", "s2"], required=True, help="Training stage")
-    parser.add_argument("--model", type=str, choices=["rgb_base", "rgb_dynamic", "rgb_attention"], required=True, help="Model architecture")
+    parser.add_argument("--model", type=str, choices=["rgb_v1", "rgb_v2"], required=True, help="Model architecture")
     parser.add_argument("--train_dir", type=str, default="dataset/dataset_v1/train")
     parser.add_argument("--val_dir", type=str, default="dataset/dataset_v1/val")
     parser.add_argument("--num_classes", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=None, help="If omitted: s1=16, s2=32")
     parser.add_argument("--epochs", type=int, default=None, help="If omitted: s1=50, s2=20")
-    parser.add_argument("--lr", type=float, default=None, help="If omitted: s1=1e-3, s2=5e-3")
+    parser.add_argument("--lr", type=float, default=None, help="1e-4 by default for both stages")
     parser.add_argument("--weight_decay", type=float, default=1e-2)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--image_h", type=int, default=480)
@@ -574,14 +639,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weights_dir", type=str, default="weights")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument("--stage1_weights", type=str, default=None, help="Optional Stage-1 checkpoint path for Stage-2")
+    parser.add_argument(
+        "--stage2_scheduler",
+        type=str,
+        choices=["none", "cosine", "steplr", "onecycle"],
+        default="cosine",
+        help="Learning-rate scheduler for Stage-2 training",
+    )
+    parser.add_argument("--min_lr", type=float, default=1e-6, help="Minimum LR for cosine scheduler")
+    parser.add_argument("--stage2_step_size", type=int, default=5, help="Step size for StepLR in Stage-2")
+    parser.add_argument("--stage2_gamma", type=float, default=0.5, help="Gamma for StepLR in Stage-2")
 
     args = parser.parse_args()
     if args.batch_size is None:
         args.batch_size = 16 if args.stage == "s1" else 32
     if args.epochs is None:
-        args.epochs = 50 if args.stage == "s1" else 20
+        args.epochs = 20 if args.stage == "s1" else 50
     if args.lr is None:
-        args.lr = 1e-3 if args.stage == "s1" else 5e-3
+        args.lr = 1e-4
     return args
 
 

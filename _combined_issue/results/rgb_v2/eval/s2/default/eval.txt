@@ -1,31 +1,5 @@
 Using device: cuda
 Model: rgb_v2
 Stage: s2
-Loaded weights: weights/rgb_v2/s2/default/best_model.pth
+Loaded weights: _combined_issue/weights/rgb_v2/s2/default/best_model.pth
 Evaluating: dataset/dataset_v1/test
-----------------------------------------
-EVALUATION RESULTS
-----------------------------------------
-Total Samples Tested : 3450
-Image Classifier Top-1: 81.80%
-Classification Macro F1: 0.8215
-Confusion Matrix (rows=true, cols=pred):
-true\pred         call    dislike       like         ok        one       palm      peace       rock       stop      three
-call               258          0          1          5         45          0          0         24         11          1
-dislike             12        239          0          2         58          0          3          8         23          0
-like                 3          2        224          1         87          0          0          3         25          0
-ok                   0          5          0        257          1         40          1          0         21         20
-one                  1          0          2          0        286          0          2         17         37          0
-palm                 0          0          0          0          0        329          0          0         15          1
-peace                0          0          0          0          4          0        291         21         15         14
-rock                15          0          0          2          7          0          0        306         14          1
-stop                 0          0          0          1         12         11          0          0        321          0
-three                0          0          0          0          0          0         19          0         15        311
-Detector Class Top-1 : 84.70%
-Detection Acc@IoU0.5 : 93.36%
-Mean Bounding Box IoU: 0.8361
-Segmentation mIoU    : 0.8535 (hand=0.7173, background=0.9897)
-Segmentation Dice    : 0.8354
-Inference Speed      : 574.99 img/s | 1.74 ms/img | 13.89 ms/batch
-Confusion matrix saved to results/rgb_v2/eval/s2/default/classification_confusion_matrix.png
-Metrics JSON saved to results/rgb_v2/eval/s2/default/metrics.json
