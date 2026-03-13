@@ -25,6 +25,10 @@ The framework supports four variants of model backbones, which determine complex
 ## Weights
 Model weights: https://liveuclac-my.sharepoint.com/:u:/g/personal/ucabibp_ucl_ac_uk/IQDQNCL_iRS0SaaHtjOPO653Ad1QgFraSKnLnfCliXo9zKg?e=Rg6EAr
 
+## Dataset
+1. Download from: https://liveuclac-my.sharepoint.com/:u:/g/personal/ucabibp_ucl_ac_uk/IQCYhc1Eedw9SLBS2TO-AsF1AUTkIyiXvem5x6uuLkt60mc?e=YO6rpZ
+2. Unzip and place the dataset in the `dataset/` directory.
+
 ## Usage
 
 ### 0. Setup and Dataset Preparation
@@ -33,7 +37,7 @@ Model weights: https://liveuclac-my.sharepoint.com/:u:/g/personal/ucabibp_ucl_ac
 ```bash
 pip install -r requirements.txt
 ```
-3. run the 'src/utils.py' and follow the instructions to generate the dataset in the format required by the dataloader. The generated dataset will be stored in `dataset/dataset_v1/` with subfolders for `train`, `val`, and `test`. Each subfolder contains images and corresponding annotation files (bounding boxes, class labels, segmentation masks).
+3. (optinal, you don't need to run this if you have already downloaded the dataset from the link above) run the 'src/utils.py' and follow the instructions to generate the dataset in the format required by the dataloader. The generated dataset will be stored in `dataset/dataset_v1/` with subfolders for `train`, `val`, and `test`. Each subfolder contains images and corresponding annotation files (bounding boxes, class labels, segmentation masks).
 ```bash
 python src/utils.py
 ```
