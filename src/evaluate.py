@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataloader import CLASS_ID_TO_NAME, HandGestureDataset_v2, detection_collate_fn
-from model import RGB_V1, RGB_V2
+from model import RGB_V1, RGB_V2, RGB_V3, RGB_V4
 from utils import (
     build_logger,
     compute_macro_f1,
@@ -27,7 +27,14 @@ from utils import (
 def _build_model(model_name: str, num_classes: int, reg_max: int = 1):
     if model_name == "rgb_v1":
         return RGB_V1(num_classes=num_classes, reg_max=reg_max)
-    return RGB_V2(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v2":
+        return RGB_V2(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v3":
+        return RGB_V3(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v4":
+        return RGB_V4(num_classes=num_classes, reg_max=reg_max)
+
+
 
 
 def _default_weights_path(model_name: str, weights_dir: str, stage: str, run_name: str) -> str:
@@ -227,10 +234,10 @@ def evaluate(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate trained model")
-    parser.add_argument("--model", type=str, choices=["rgb_v1", "rgb_v2"], default="rgb_v2")
+    parser.add_argument("--model", type=str, choices=["rgb_v1", "rgb_v2", "rgb_v3", "rgb_v4"], default="rgb_v2")
     parser.add_argument("--stage", type=str, choices=["s1", "s2"], default="s2")
     parser.add_argument("--weights", type=str, default=None, help="Optional checkpoint path override")
-    parser.add_argument("--data_dir", type=str, default="dataset/dataset_v1/test")
+    parser.add_argument("--data_dir", type=str, default="dataset/dataset_v1/val")
     parser.add_argument("--num_classes", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_workers", type=int, default=4)

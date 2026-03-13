@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataloader import CLASS_ID_TO_NAME, HandGestureDataset_v2, SegAugment_v2, detection_collate_fn
-from model import RGB_V1, RGB_V2
+from model import RGB_V1, RGB_V2, RGB_V3, RGB_V4
 from utils import (
     YOLODetectionLoss,
     build_logger,
@@ -46,7 +46,12 @@ def _build_loader(dataset, batch_size: int, shuffle: bool, num_workers: int, dro
 def _build_model(model_name: str, num_classes: int, reg_max: int = 1):
     if model_name == "rgb_v1":
         return RGB_V1(num_classes=num_classes, reg_max=reg_max)
-    return RGB_V2(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v2":
+        return RGB_V2(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v3":
+        return RGB_V3(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v4":
+        return RGB_V4(num_classes=num_classes, reg_max=reg_max)
 
 
 def _checkpoint_paths(model_name: str, weights_dir: str, run_name: str) -> dict[str, str]:
@@ -623,7 +628,7 @@ def _train_stage2(args: argparse.Namespace) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Unified training script for Stage-1 and Stage-2")
     parser.add_argument("--stage", type=str, choices=["s1", "s2"], required=True, help="Training stage")
-    parser.add_argument("--model", type=str, choices=["rgb_v1", "rgb_v2"], required=True, help="Model architecture")
+    parser.add_argument("--model", type=str, choices=["rgb_v1", "rgb_v2", "rgb_v3", "rgb_v4"], required=True, help="Model architecture")
     parser.add_argument("--train_dir", type=str, default="dataset/dataset_v1/train")
     parser.add_argument("--val_dir", type=str, default="dataset/dataset_v1/val")
     parser.add_argument("--num_classes", type=int, default=10)
@@ -654,7 +659,7 @@ def parse_args() -> argparse.Namespace:
     if args.batch_size is None:
         args.batch_size = 16 if args.stage == "s1" else 32
     if args.epochs is None:
-        args.epochs = 20 if args.stage == "s1" else 50
+        args.epochs = 10 if args.stage == "s1" else 50
     if args.lr is None:
         args.lr = 1e-4
     return args

@@ -20,7 +20,7 @@ from dataloader import (
     _to_numpy_mask,
     detection_collate_fn,
 )
-from model import RGB_V1, RGB_V2
+from model import RGB_V1, RGB_V2, RGB_V3, RGB_V4
 from utils import (
     build_logger,
     cxcywh_to_xyxy,
@@ -34,7 +34,14 @@ from utils import (
 def _build_model(model_name: str, num_classes: int, reg_max: int = 1):
     if model_name == "rgb_v1":
         return RGB_V1(num_classes=num_classes, reg_max=reg_max)
-    return RGB_V2(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v2":
+        return RGB_V2(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v3":
+        return RGB_V3(num_classes=num_classes, reg_max=reg_max)
+    elif model_name == "rgb_v4":
+        return RGB_V4(num_classes=num_classes, reg_max=reg_max)
+
+
 
 
 def _default_weights_path(model_name: str, weights_dir: str, stage: str, run_name: str) -> str:
@@ -151,7 +158,8 @@ def visualise(args: argparse.Namespace) -> None:
             persistent_workers=(args.num_workers > 0),
         )
 
-        best_visualizations = []
+        best_visualizations_per_class = {}
+        worst_visualizations = []
         candidate_id = 0
         total_samples = 0
 
@@ -218,11 +226,17 @@ def visualise(args: argparse.Namespace) -> None:
                     float(pred_conf),
                 )
 
-                should_store = len(best_visualizations) < args.num_samples
-                if not should_store and len(best_visualizations) > 0:
-                    should_store = quality_key > best_visualizations[0][0]
+                should_store = False
+                if true_class_id not in best_visualizations_per_class:
+                    should_store = True
+                elif quality_key > best_visualizations_per_class[true_class_id][0]:
+                    should_store = True
 
-                if should_store:
+                should_store_worst = len(worst_visualizations) < 5
+                if not should_store_worst and len(worst_visualizations) > 0:
+                    should_store_worst = quality_key < worst_visualizations[-1][0]
+
+                if should_store or should_store_worst:
                     true_name = CLASS_ID_TO_NAME.get(true_class_id, "Unknown")
                     pred_name = CLASS_ID_TO_NAME.get(predicted_class_id, "Unknown")
                     det_pred_name = CLASS_ID_TO_NAME.get(detector_class_id, "Unknown")
@@ -245,32 +259,61 @@ def visualise(args: argparse.Namespace) -> None:
                         "seg_miou": float(sample_seg_miou),
                         "seg_dice": float(sample_seg_dice),
                     }
-                    item = (quality_key, candidate_id, payload)
-                    if len(best_visualizations) < args.num_samples:
-                        heapq.heappush(best_visualizations, item)
-                    else:
-                        heapq.heapreplace(best_visualizations, item)
+                    
+                    if should_store:
+                        best_visualizations_per_class[true_class_id] = (quality_key, candidate_id, payload)
+                    
+                    if should_store_worst:
+                        # Negate quality_key for max-heap behavior so we keep the lowest 5 (the worst ones)
+                        item = (quality_key, candidate_id, payload)
+                        # heapq is a min-heap. To keep the 5 smallest elements (worst ones), 
+                        # we can maintain a max-heap of size 5. Python only has min-heap.
+                        # We use -quality_key or create a wrapper. 
+                        # Wait, we want to keep the 5 *smallest* items.
+                        # So the heap should store the *largest* of the 5 smallest at the top,
+                        # so if something is smaller, we replace it.
+                        # Therefore we need a MAX HEAP. In python we invert the key.
+                        # Let's invert the key: 
+                        # inverted_key = tuple(-x if isinstance(x, (int, float)) else x for x in quality_key)
+                        
+                        # Actually, a simpler way since it's only 5 items is to keep a list and sort
+                        worst_visualizations.append(item)
+                        worst_visualizations.sort(key=lambda x: (x[0], x[1]))
+                        if len(worst_visualizations) > 5:
+                            worst_visualizations.pop()  # Remove the largest (best) among the worst
+
                     candidate_id += 1
 
-        ranked = sorted(best_visualizations, key=lambda item: (item[0], item[1]), reverse=True)
+        ranked = sorted(best_visualizations_per_class.values(), key=lambda item: (item[0], item[1]), reverse=True)
         for rank, (_, _, payload) in enumerate(ranked, start=1):
-            save_path = os.path.join(out_dir, f"sample_{rank:02d}.png")
+            save_path = os.path.join(out_dir, f"best_sample_{rank:02d}.png")
             _save_demo_prediction_figure(payload, save_path)
             log(
-                f"Rank {rank:02d} | Sample {payload['sample_index']:04d} | "
+                f"Best Rank {rank:02d} | Sample {payload['sample_index']:04d} | "
                 f"Cls true={payload['true_name']} pred={payload['pred_name']} ({payload['pred_class_conf']:.2f}) | "
                 f"Det pred={payload['det_pred_name']} ({payload['pred_conf']:.2f}) | "
                 f"IoU={payload['iou']:.2f} | Seg mIoU={payload['seg_miou']:.2f} | Dice={payload['seg_dice']:.2f}"
             )
 
-        log(f"Saved {len(ranked)} visualisations to {out_dir}")
+        worst = sorted(worst_visualizations, key=lambda item: (item[0], item[1]))
+        for rank, (_, _, payload) in enumerate(worst, start=1):
+            save_path = os.path.join(out_dir, f"worst_sample_{rank:02d}.png")
+            _save_demo_prediction_figure(payload, save_path)
+            log(
+                f"Worst Rank {rank:02d} | Sample {payload['sample_index']:04d} | "
+                f"Cls true={payload['true_name']} pred={payload['pred_name']} ({payload['pred_class_conf']:.2f}) | "
+                f"Det pred={payload['det_pred_name']} ({payload['pred_conf']:.2f}) | "
+                f"IoU={payload['iou']:.2f} | Seg mIoU={payload['seg_miou']:.2f} | Dice={payload['seg_dice']:.2f}"
+            )
+
+        log(f"Saved {len(ranked)} best and {len(worst)} worst visualisations to {out_dir}")
     finally:
         close_log()
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Save qualitative prediction visualisations")
-    parser.add_argument("--model", type=str, choices=["rgb_v1", "rgb_v2"], default="rgb_v2")
+    parser.add_argument("--model", type=str, choices=["rgb_v1", "rgb_v2", "rgb_v3", "rgb_v4"], default="rgb_v2")
     parser.add_argument("--stage", type=str, choices=["s1", "s2"], default="s2")
     parser.add_argument("--weights", type=str, default=None, help="Optional checkpoint path override")
     parser.add_argument("--data_dir", type=str, default="dataset/dataset_v1/test")

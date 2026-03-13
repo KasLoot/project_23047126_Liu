@@ -1,5 +1,0 @@
-Using device: cuda
-Model: rgb_v2
-Stage: s2
-Loaded weights: _combined_issue/weights/rgb_v2/s2/default/best_model.pth
-Evaluating: dataset/dataset_v1/test

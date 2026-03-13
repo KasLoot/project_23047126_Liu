@@ -1,0 +1,21 @@
+Using device: cuda
+Epoch 1/10 | Train Loss=2.5642 Val Loss=2.1444 | Train Det@0.5=0.08% Val Det@0.5=1.88% | Train IoU=0.0025 Val IoU=0.0586 | 
+Saved new best Stage-1 model (Val Loss: 2.1444)
+Epoch 2/10 | Train Loss=1.6523 Val Loss=1.3612 | Train Det@0.5=40.96% Val Det@0.5=61.88% | Train IoU=0.3576 Val IoU=0.5091 | 
+Saved new best Stage-1 model (Val Loss: 1.3612)
+Epoch 3/10 | Train Loss=1.2260 Val Loss=1.0606 | Train Det@0.5=71.46% Val Det@0.5=80.31% | Train IoU=0.5445 Val IoU=0.6079 | 
+Saved new best Stage-1 model (Val Loss: 1.0606)
+Epoch 4/10 | Train Loss=1.0374 Val Loss=0.9450 | Train Det@0.5=81.71% Val Det@0.5=91.88% | Train IoU=0.6246 Val IoU=0.6877 | 
+Saved new best Stage-1 model (Val Loss: 0.9450)
+Epoch 5/10 | Train Loss=0.9432 Val Loss=0.8825 | Train Det@0.5=85.75% Val Det@0.5=90.00% | Train IoU=0.6645 Val IoU=0.7077 | 
+Saved new best Stage-1 model (Val Loss: 0.8825)
+Epoch 6/10 | Train Loss=0.8823 Val Loss=0.8199 | Train Det@0.5=87.25% Val Det@0.5=91.25% | Train IoU=0.6886 Val IoU=0.7288 | 
+Saved new best Stage-1 model (Val Loss: 0.8199)
+Epoch 7/10 | Train Loss=0.8261 Val Loss=0.7512 | Train Det@0.5=89.12% Val Det@0.5=95.00% | Train IoU=0.7113 Val IoU=0.7730 | 
+Saved new best Stage-1 model (Val Loss: 0.7512)
+Epoch 8/10 | Train Loss=0.7830 Val Loss=0.7090 | Train Det@0.5=90.79% Val Det@0.5=96.56% | Train IoU=0.7362 Val IoU=0.8002 | 
+Saved new best Stage-1 model (Val Loss: 0.7090)
+Epoch 9/10 | Train Loss=0.7630 Val Loss=0.6811 | Train Det@0.5=91.38% Val Det@0.5=95.94% | Train IoU=0.7479 Val IoU=0.8039 | 
+Saved new best Stage-1 model (Val Loss: 0.6811)
+Epoch 10/10 | Train Loss=0.7552 Val Loss=0.6755 | Train Det@0.5=92.12% Val Det@0.5=95.00% | Train IoU=0.7515 Val IoU=0.7970 | 
+Saved new best Stage-1 model (Val Loss: 0.6755)

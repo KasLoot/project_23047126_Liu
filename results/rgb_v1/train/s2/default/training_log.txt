@@ -1,180 +1,182 @@
 Using device: cuda
 Loaded Stage-1 weights from weights/rgb_v1/s1/default/best_model.pth
 Stage-2 scheduler: cosine
-Epoch 1/50 | Train Loss=3.4220 Val Loss=2.7820 | Train ClsAcc=0.3233 Val ClsAcc=0.4688 | Train Det@0.5=0.8042 Val Det@0.5=0.9000 | 
-Train Seg mIoU=0.7223 (hand=0.4702, background=0.9745) | Train Dice=0.6397
-Val Seg mIoU=0.7622 (hand=0.5443, background=0.9801) | Val Dice=0.7049
-Saved new best Stage-2 model (macro_f1=0.4273, dice=0.7049, val_loss=2.7820)
-Epoch 2/50 | Train Loss=2.6554 Val Loss=2.2380 | Train ClsAcc=0.4592 Val ClsAcc=0.6844 | Train Det@0.5=0.8192 Val Det@0.5=0.9125 | 
-Train Seg mIoU=0.8170 (hand=0.6463, background=0.9877) | Train Dice=0.7851
-Val Seg mIoU=0.8270 (hand=0.6658, background=0.9882) | Val Dice=0.7994
-Saved new best Stage-2 model (macro_f1=0.6804, dice=0.7994, val_loss=2.2380)
-Epoch 3/50 | Train Loss=2.2275 Val Loss=2.0648 | Train ClsAcc=0.5238 Val ClsAcc=0.6219 | Train Det@0.5=0.8508 Val Det@0.5=0.8719 | 
-Train Seg mIoU=0.8328 (hand=0.6760, background=0.9896) | Train Dice=0.8067
-Val Seg mIoU=0.8275 (hand=0.6654, background=0.9896) | Val Dice=0.7991
-Saved new best Stage-2 model (macro_f1=0.5985, dice=0.7991, val_loss=2.0648)
-Epoch 4/50 | Train Loss=1.8874 Val Loss=2.2615 | Train ClsAcc=0.5871 Val ClsAcc=0.5156 | Train Det@0.5=0.8679 Val Det@0.5=0.9219 | 
-Train Seg mIoU=0.8453 (hand=0.7000, background=0.9907) | Train Dice=0.8235
-Val Seg mIoU=0.8122 (hand=0.6344, background=0.9900) | Val Dice=0.7763
-Epoch 5/50 | Train Loss=1.7139 Val Loss=2.1237 | Train ClsAcc=0.6175 Val ClsAcc=0.5250 | Train Det@0.5=0.8988 Val Det@0.5=0.8938 | 
-Train Seg mIoU=0.8519 (hand=0.7124, background=0.9913) | Train Dice=0.8321
-Val Seg mIoU=0.8454 (hand=0.7002, background=0.9905) | Val Dice=0.8237
-Epoch 6/50 | Train Loss=1.5633 Val Loss=1.6918 | Train ClsAcc=0.6504 Val ClsAcc=0.7500 | Train Det@0.5=0.9058 Val Det@0.5=0.9156 | 
-Train Seg mIoU=0.8537 (hand=0.7159, background=0.9914) | Train Dice=0.8345
-Val Seg mIoU=0.8417 (hand=0.6930, background=0.9904) | Val Dice=0.8187
-Saved new best Stage-2 model (macro_f1=0.7515, dice=0.8187, val_loss=1.6918)
-Epoch 7/50 | Train Loss=1.4785 Val Loss=1.3212 | Train ClsAcc=0.6692 Val ClsAcc=0.8500 | Train Det@0.5=0.9000 Val Det@0.5=0.9250 | 
-Train Seg mIoU=0.8644 (hand=0.7367, background=0.9921) | Train Dice=0.8484
-Val Seg mIoU=0.8621 (hand=0.7318, background=0.9925) | Val Dice=0.8451
-Saved new best Stage-2 model (macro_f1=0.8502, dice=0.8451, val_loss=1.3212)
-Epoch 8/50 | Train Loss=1.3447 Val Loss=1.4881 | Train ClsAcc=0.7129 Val ClsAcc=0.7500 | Train Det@0.5=0.9096 Val Det@0.5=0.9406 | 
-Train Seg mIoU=0.8689 (hand=0.7453, background=0.9924) | Train Dice=0.8541
-Val Seg mIoU=0.8913 (hand=0.7886, background=0.9940) | Val Dice=0.8818
-Epoch 9/50 | Train Loss=1.2612 Val Loss=1.4481 | Train ClsAcc=0.7329 Val ClsAcc=0.7688 | Train Det@0.5=0.9304 Val Det@0.5=0.9750 | 
-Train Seg mIoU=0.8766 (hand=0.7603, background=0.9929) | Train Dice=0.8639
-Val Seg mIoU=0.8871 (hand=0.7807, background=0.9936) | Val Dice=0.8768
-Epoch 10/50 | Train Loss=1.2059 Val Loss=1.4906 | Train ClsAcc=0.7512 Val ClsAcc=0.7312 | Train Det@0.5=0.9233 Val Det@0.5=0.9469 | 
-Train Seg mIoU=0.8755 (hand=0.7582, background=0.9928) | Train Dice=0.8625
-Val Seg mIoU=0.8696 (hand=0.7471, background=0.9921) | Val Dice=0.8553
-Epoch 11/50 | Train Loss=1.1750 Val Loss=1.1952 | Train ClsAcc=0.7488 Val ClsAcc=0.8031 | Train Det@0.5=0.9217 Val Det@0.5=0.9469 | 
-Train Seg mIoU=0.8797 (hand=0.7664, background=0.9931) | Train Dice=0.8677
-Val Seg mIoU=0.8736 (hand=0.7542, background=0.9931) | Val Dice=0.8599
-Saved new best Stage-2 model (macro_f1=0.8025, dice=0.8599, val_loss=1.1952)
-Epoch 12/50 | Train Loss=1.1013 Val Loss=1.1125 | Train ClsAcc=0.7671 Val ClsAcc=0.8156 | Train Det@0.5=0.9325 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.8820 (hand=0.7706, background=0.9933) | Train Dice=0.8705
-Val Seg mIoU=0.9166 (hand=0.8379, background=0.9953) | Val Dice=0.9118
-Saved new best Stage-2 model (macro_f1=0.8128, dice=0.9118, val_loss=1.1125)
-Epoch 13/50 | Train Loss=1.0730 Val Loss=1.3756 | Train ClsAcc=0.7821 Val ClsAcc=0.7531 | Train Det@0.5=0.9425 Val Det@0.5=0.9844 | 
-Train Seg mIoU=0.8916 (hand=0.7893, background=0.9939) | Train Dice=0.8822
-Val Seg mIoU=0.8808 (hand=0.7680, background=0.9936) | Val Dice=0.8688
-Epoch 14/50 | Train Loss=0.9992 Val Loss=1.0214 | Train ClsAcc=0.7917 Val ClsAcc=0.8906 | Train Det@0.5=0.9413 Val Det@0.5=0.9313 | 
-Train Seg mIoU=0.8938 (hand=0.7935, background=0.9940) | Train Dice=0.8849
-Val Seg mIoU=0.9059 (hand=0.8170, background=0.9948) | Val Dice=0.8993
-Saved new best Stage-2 model (macro_f1=0.8914, dice=0.8993, val_loss=1.0214)
-Epoch 15/50 | Train Loss=0.9930 Val Loss=1.0193 | Train ClsAcc=0.8029 Val ClsAcc=0.8812 | Train Det@0.5=0.9433 Val Det@0.5=0.9844 | 
-Train Seg mIoU=0.8987 (hand=0.8032, background=0.9943) | Train Dice=0.8909
-Val Seg mIoU=0.9108 (hand=0.8265, background=0.9951) | Val Dice=0.9050
-Saved new best Stage-2 model (macro_f1=0.8829, dice=0.9050, val_loss=1.0193)
-Epoch 16/50 | Train Loss=0.9052 Val Loss=1.2816 | Train ClsAcc=0.8258 Val ClsAcc=0.7469 | Train Det@0.5=0.9475 Val Det@0.5=0.9656 | 
-Train Seg mIoU=0.9001 (hand=0.8058, background=0.9944) | Train Dice=0.8925
-Val Seg mIoU=0.9216 (hand=0.8476, background=0.9957) | Val Dice=0.9175
-Epoch 17/50 | Train Loss=0.9286 Val Loss=0.9584 | Train ClsAcc=0.8183 Val ClsAcc=0.9062 | Train Det@0.5=0.9450 Val Det@0.5=0.9688 | 
-Train Seg mIoU=0.8967 (hand=0.7993, background=0.9941) | Train Dice=0.8885
-Val Seg mIoU=0.9206 (hand=0.8455, background=0.9957) | Val Dice=0.9163
-Saved new best Stage-2 model (macro_f1=0.9060, dice=0.9163, val_loss=0.9584)
-Epoch 18/50 | Train Loss=0.8556 Val Loss=1.0090 | Train ClsAcc=0.8371 Val ClsAcc=0.8938 | Train Det@0.5=0.9554 Val Det@0.5=0.9625 | 
-Train Seg mIoU=0.9053 (hand=0.8159, background=0.9947) | Train Dice=0.8986
-Val Seg mIoU=0.9001 (hand=0.8056, background=0.9945) | Val Dice=0.8924
-Epoch 19/50 | Train Loss=0.8523 Val Loss=0.9531 | Train ClsAcc=0.8354 Val ClsAcc=0.8906 | Train Det@0.5=0.9533 Val Det@0.5=0.9688 | 
-Train Seg mIoU=0.9043 (hand=0.8139, background=0.9946) | Train Dice=0.8974
-Val Seg mIoU=0.9206 (hand=0.8455, background=0.9957) | Val Dice=0.9163
-Saved new best Stage-2 model (macro_f1=0.8909, dice=0.9163, val_loss=0.9531)
-Epoch 20/50 | Train Loss=0.7652 Val Loss=0.9496 | Train ClsAcc=0.8625 Val ClsAcc=0.9031 | Train Det@0.5=0.9637 Val Det@0.5=0.9656 | 
-Train Seg mIoU=0.9092 (hand=0.8235, background=0.9949) | Train Dice=0.9032
-Val Seg mIoU=0.9091 (hand=0.8230, background=0.9951) | Val Dice=0.9029
-Saved new best Stage-2 model (macro_f1=0.9033, dice=0.9029, val_loss=0.9496)
-Epoch 21/50 | Train Loss=0.7913 Val Loss=1.0570 | Train ClsAcc=0.8467 Val ClsAcc=0.8531 | Train Det@0.5=0.9579 Val Det@0.5=0.9719 | 
-Train Seg mIoU=0.9100 (hand=0.8251, background=0.9949) | Train Dice=0.9042
-Val Seg mIoU=0.9295 (hand=0.8628, background=0.9961) | Val Dice=0.9264
-Epoch 22/50 | Train Loss=0.7473 Val Loss=0.9443 | Train ClsAcc=0.8721 Val ClsAcc=0.8969 | Train Det@0.5=0.9579 Val Det@0.5=0.9812 | 
-Train Seg mIoU=0.9141 (hand=0.8331, background=0.9952) | Train Dice=0.9089
-Val Seg mIoU=0.9160 (hand=0.8365, background=0.9955) | Val Dice=0.9110
-Saved new best Stage-2 model (macro_f1=0.8971, dice=0.9110, val_loss=0.9443)
-Epoch 23/50 | Train Loss=0.7293 Val Loss=0.8773 | Train ClsAcc=0.8671 Val ClsAcc=0.8875 | Train Det@0.5=0.9633 Val Det@0.5=0.9844 | 
-Train Seg mIoU=0.9144 (hand=0.8336, background=0.9952) | Train Dice=0.9093
-Val Seg mIoU=0.9327 (hand=0.8692, background=0.9963) | Val Dice=0.9300
-Saved new best Stage-2 model (macro_f1=0.8866, dice=0.9300, val_loss=0.8773)
-Epoch 24/50 | Train Loss=0.6760 Val Loss=0.8288 | Train ClsAcc=0.8854 Val ClsAcc=0.9281 | Train Det@0.5=0.9708 Val Det@0.5=0.9844 | 
-Train Seg mIoU=0.9196 (hand=0.8436, background=0.9955) | Train Dice=0.9152
-Val Seg mIoU=0.9418 (hand=0.8868, background=0.9968) | Val Dice=0.9400
-Saved new best Stage-2 model (macro_f1=0.9288, dice=0.9400, val_loss=0.8288)
-Epoch 25/50 | Train Loss=0.6447 Val Loss=0.7311 | Train ClsAcc=0.8996 Val ClsAcc=0.9500 | Train Det@0.5=0.9721 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9237 (hand=0.8517, background=0.9958) | Train Dice=0.9199
-Val Seg mIoU=0.9402 (hand=0.8838, background=0.9967) | Val Dice=0.9383
-Saved new best Stage-2 model (macro_f1=0.9500, dice=0.9383, val_loss=0.7311)
-Epoch 26/50 | Train Loss=0.6220 Val Loss=0.6999 | Train ClsAcc=0.8983 Val ClsAcc=0.9375 | Train Det@0.5=0.9725 Val Det@0.5=0.9906 | 
-Train Seg mIoU=0.9228 (hand=0.8499, background=0.9957) | Train Dice=0.9189
-Val Seg mIoU=0.9385 (hand=0.8803, background=0.9966) | Val Dice=0.9364
-Saved new best Stage-2 model (macro_f1=0.9374, dice=0.9364, val_loss=0.6999)
-Epoch 27/50 | Train Loss=0.6003 Val Loss=0.8419 | Train ClsAcc=0.9083 Val ClsAcc=0.9094 | Train Det@0.5=0.9729 Val Det@0.5=0.9906 | 
-Train Seg mIoU=0.9239 (hand=0.8520, background=0.9958) | Train Dice=0.9201
-Val Seg mIoU=0.9353 (hand=0.8741, background=0.9965) | Val Dice=0.9328
-Epoch 28/50 | Train Loss=0.6095 Val Loss=0.7157 | Train ClsAcc=0.9058 Val ClsAcc=0.9375 | Train Det@0.5=0.9692 Val Det@0.5=1.0000 | 
-Train Seg mIoU=0.9231 (hand=0.8505, background=0.9957) | Train Dice=0.9192
-Val Seg mIoU=0.9258 (hand=0.8556, background=0.9960) | Val Dice=0.9222
-Epoch 29/50 | Train Loss=0.5652 Val Loss=0.7094 | Train ClsAcc=0.9137 Val ClsAcc=0.9313 | Train Det@0.5=0.9758 Val Det@0.5=0.9906 | 
-Train Seg mIoU=0.9266 (hand=0.8572, background=0.9959) | Train Dice=0.9231
-Val Seg mIoU=0.9406 (hand=0.8844, background=0.9968) | Val Dice=0.9387
-Epoch 30/50 | Train Loss=0.5655 Val Loss=0.6692 | Train ClsAcc=0.9137 Val ClsAcc=0.9437 | Train Det@0.5=0.9812 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9284 (hand=0.8608, background=0.9960) | Train Dice=0.9252
-Val Seg mIoU=0.9438 (hand=0.8906, background=0.9970) | Val Dice=0.9421
-Saved new best Stage-2 model (macro_f1=0.9434, dice=0.9421, val_loss=0.6692)
-Epoch 31/50 | Train Loss=0.5019 Val Loss=0.7026 | Train ClsAcc=0.9337 Val ClsAcc=0.9469 | Train Det@0.5=0.9783 Val Det@0.5=0.9750 | 
-Train Seg mIoU=0.9328 (hand=0.8693, background=0.9963) | Train Dice=0.9301
-Val Seg mIoU=0.9372 (hand=0.8779, background=0.9966) | Val Dice=0.9350
-Epoch 32/50 | Train Loss=0.5173 Val Loss=0.6716 | Train ClsAcc=0.9275 Val ClsAcc=0.9469 | Train Det@0.5=0.9796 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9320 (hand=0.8677, background=0.9962) | Train Dice=0.9292
-Val Seg mIoU=0.9328 (hand=0.8692, background=0.9964) | Val Dice=0.9300
-Epoch 33/50 | Train Loss=0.5160 Val Loss=0.6235 | Train ClsAcc=0.9254 Val ClsAcc=0.9563 | Train Det@0.5=0.9775 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9303 (hand=0.8645, background=0.9961) | Train Dice=0.9273
-Val Seg mIoU=0.9313 (hand=0.8663, background=0.9963) | Val Dice=0.9284
-Saved new best Stage-2 model (macro_f1=0.9565, dice=0.9284, val_loss=0.6235)
-Epoch 34/50 | Train Loss=0.4788 Val Loss=0.6216 | Train ClsAcc=0.9342 Val ClsAcc=0.9563 | Train Det@0.5=0.9808 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9330 (hand=0.8697, background=0.9963) | Train Dice=0.9303
-Val Seg mIoU=0.9402 (hand=0.8836, background=0.9968) | Val Dice=0.9382
-Saved new best Stage-2 model (macro_f1=0.9563, dice=0.9382, val_loss=0.6216)
-Epoch 35/50 | Train Loss=0.4614 Val Loss=0.6671 | Train ClsAcc=0.9433 Val ClsAcc=0.9469 | Train Det@0.5=0.9808 Val Det@0.5=0.9938 | 
-Train Seg mIoU=0.9363 (hand=0.8762, background=0.9965) | Train Dice=0.9340
-Val Seg mIoU=0.9372 (hand=0.8777, background=0.9966) | Val Dice=0.9349
-Epoch 36/50 | Train Loss=0.4634 Val Loss=0.6257 | Train ClsAcc=0.9396 Val ClsAcc=0.9500 | Train Det@0.5=0.9821 Val Det@0.5=0.9906 | 
-Train Seg mIoU=0.9357 (hand=0.8749, background=0.9965) | Train Dice=0.9333
-Val Seg mIoU=0.9443 (hand=0.8916, background=0.9970) | Val Dice=0.9427
-Epoch 37/50 | Train Loss=0.4475 Val Loss=0.5990 | Train ClsAcc=0.9433 Val ClsAcc=0.9625 | Train Det@0.5=0.9858 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9363 (hand=0.8761, background=0.9965) | Train Dice=0.9340
-Val Seg mIoU=0.9457 (hand=0.8943, background=0.9971) | Val Dice=0.9442
-Saved new best Stage-2 model (macro_f1=0.9625, dice=0.9442, val_loss=0.5990)
-Epoch 38/50 | Train Loss=0.4105 Val Loss=0.5776 | Train ClsAcc=0.9487 Val ClsAcc=0.9656 | Train Det@0.5=0.9862 Val Det@0.5=0.9938 | 
-Train Seg mIoU=0.9388 (hand=0.8809, background=0.9966) | Train Dice=0.9367
-Val Seg mIoU=0.9453 (hand=0.8935, background=0.9971) | Val Dice=0.9438
-Saved new best Stage-2 model (macro_f1=0.9656, dice=0.9438, val_loss=0.5776)
-Epoch 39/50 | Train Loss=0.4001 Val Loss=0.5854 | Train ClsAcc=0.9575 Val ClsAcc=0.9563 | Train Det@0.5=0.9875 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9388 (hand=0.8809, background=0.9966) | Train Dice=0.9367
-Val Seg mIoU=0.9460 (hand=0.8950, background=0.9971) | Val Dice=0.9446
-Epoch 40/50 | Train Loss=0.3988 Val Loss=0.5721 | Train ClsAcc=0.9542 Val ClsAcc=0.9688 | Train Det@0.5=0.9854 Val Det@0.5=0.9906 | 
-Train Seg mIoU=0.9373 (hand=0.8781, background=0.9966) | Train Dice=0.9351
-Val Seg mIoU=0.9453 (hand=0.8935, background=0.9970) | Val Dice=0.9438
-Saved new best Stage-2 model (macro_f1=0.9688, dice=0.9438, val_loss=0.5721)
-Epoch 41/50 | Train Loss=0.3835 Val Loss=0.5945 | Train ClsAcc=0.9613 Val ClsAcc=0.9531 | Train Det@0.5=0.9858 Val Det@0.5=0.9906 | 
-Train Seg mIoU=0.9394 (hand=0.8822, background=0.9967) | Train Dice=0.9374
-Val Seg mIoU=0.9483 (hand=0.8995, background=0.9972) | Val Dice=0.9471
-Epoch 42/50 | Train Loss=0.3744 Val Loss=0.5998 | Train ClsAcc=0.9642 Val ClsAcc=0.9500 | Train Det@0.5=0.9833 Val Det@0.5=0.9844 | 
-Train Seg mIoU=0.9405 (hand=0.8843, background=0.9967) | Train Dice=0.9386
-Val Seg mIoU=0.9487 (hand=0.9001, background=0.9972) | Val Dice=0.9474
-Epoch 43/50 | Train Loss=0.3648 Val Loss=0.5761 | Train ClsAcc=0.9671 Val ClsAcc=0.9563 | Train Det@0.5=0.9871 Val Det@0.5=0.9812 | 
-Train Seg mIoU=0.9418 (hand=0.8868, background=0.9968) | Train Dice=0.9400
-Val Seg mIoU=0.9471 (hand=0.8971, background=0.9972) | Val Dice=0.9458
-Epoch 44/50 | Train Loss=0.3566 Val Loss=0.5592 | Train ClsAcc=0.9688 Val ClsAcc=0.9688 | Train Det@0.5=0.9896 Val Det@0.5=0.9844 | 
-Train Seg mIoU=0.9418 (hand=0.8867, background=0.9968) | Train Dice=0.9400
-Val Seg mIoU=0.9479 (hand=0.8987, background=0.9972) | Val Dice=0.9466
-Saved new best Stage-2 model (macro_f1=0.9687, dice=0.9466, val_loss=0.5592)
-Epoch 45/50 | Train Loss=0.3463 Val Loss=0.5609 | Train ClsAcc=0.9738 Val ClsAcc=0.9688 | Train Det@0.5=0.9883 Val Det@0.5=0.9844 | 
-Train Seg mIoU=0.9419 (hand=0.8869, background=0.9968) | Train Dice=0.9401
-Val Seg mIoU=0.9486 (hand=0.9000, background=0.9972) | Val Dice=0.9474
-Epoch 46/50 | Train Loss=0.3563 Val Loss=0.5656 | Train ClsAcc=0.9700 Val ClsAcc=0.9625 | Train Det@0.5=0.9862 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9421 (hand=0.8874, background=0.9968) | Train Dice=0.9403
-Val Seg mIoU=0.9455 (hand=0.8940, background=0.9971) | Val Dice=0.9440
-Epoch 47/50 | Train Loss=0.3576 Val Loss=0.5754 | Train ClsAcc=0.9675 Val ClsAcc=0.9563 | Train Det@0.5=0.9883 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9434 (hand=0.8899, background=0.9969) | Train Dice=0.9417
-Val Seg mIoU=0.9466 (hand=0.8960, background=0.9971) | Val Dice=0.9452
-Epoch 48/50 | Train Loss=0.3455 Val Loss=0.5430 | Train ClsAcc=0.9700 Val ClsAcc=0.9719 | Train Det@0.5=0.9862 Val Det@0.5=0.9906 | 
-Train Seg mIoU=0.9416 (hand=0.8865, background=0.9968) | Train Dice=0.9398
-Val Seg mIoU=0.9467 (hand=0.8963, background=0.9971) | Val Dice=0.9453
-Saved new best Stage-2 model (macro_f1=0.9718, dice=0.9453, val_loss=0.5430)
-Epoch 49/50 | Train Loss=0.3571 Val Loss=0.5638 | Train ClsAcc=0.9654 Val ClsAcc=0.9656 | Train Det@0.5=0.9875 Val Det@0.5=0.9906 | 
-Train Seg mIoU=0.9419 (hand=0.8869, background=0.9968) | Train Dice=0.9401
-Val Seg mIoU=0.9475 (hand=0.8978, background=0.9972) | Val Dice=0.9462
-Epoch 50/50 | Train Loss=0.3377 Val Loss=0.5586 | Train ClsAcc=0.9738 Val ClsAcc=0.9688 | Train Det@0.5=0.9900 Val Det@0.5=0.9875 | 
-Train Seg mIoU=0.9421 (hand=0.8874, background=0.9968) | Train Dice=0.9404
-Val Seg mIoU=0.9476 (hand=0.8980, background=0.9972) | Val Dice=0.9463
+Epoch 1/50 | Train Loss=3.8446 Val Loss=3.2970 | Train ClsAcc=0.1671 Val ClsAcc=0.3219 | Train Det@0.5=0.8921 Val Det@0.5=0.9406 | 
+Train Seg mIoU=0.7093 (hand=0.4467, background=0.9719) | Train Dice=0.6176
+Val Seg mIoU=0.7390 (hand=0.5019, background=0.9762) | Val Dice=0.6683
+Saved new best Stage-2 model (macro_f1=0.2658, dice=0.6683, val_loss=3.2970)
+Epoch 2/50 | Train Loss=3.4407 Val Loss=2.9969 | Train ClsAcc=0.2896 Val ClsAcc=0.4562 | Train Det@0.5=0.8962 Val Det@0.5=0.8938 | 
+Train Seg mIoU=0.7796 (hand=0.5763, background=0.9830) | Train Dice=0.7312
+Val Seg mIoU=0.8289 (hand=0.6682, background=0.9895) | Val Dice=0.8011
+Saved new best Stage-2 model (macro_f1=0.4368, dice=0.8011, val_loss=2.9969)
+Epoch 3/50 | Train Loss=3.1782 Val Loss=2.7602 | Train ClsAcc=0.3508 Val ClsAcc=0.5312 | Train Det@0.5=0.8983 Val Det@0.5=0.9406 | 
+Train Seg mIoU=0.8073 (hand=0.6283, background=0.9864) | Train Dice=0.7717
+Val Seg mIoU=0.8136 (hand=0.6405, background=0.9867) | Val Dice=0.7809
+Saved new best Stage-2 model (macro_f1=0.5221, dice=0.7809, val_loss=2.7602)
+Epoch 4/50 | Train Loss=2.9760 Val Loss=2.5958 | Train ClsAcc=0.4037 Val ClsAcc=0.4625 | Train Det@0.5=0.9021 Val Det@0.5=0.9437 | 
+Train Seg mIoU=0.8207 (hand=0.6536, background=0.9879) | Train Dice=0.7905
+Val Seg mIoU=0.8426 (hand=0.6948, background=0.9903) | Val Dice=0.8199
+Saved new best Stage-2 model (macro_f1=0.4123, dice=0.8199, val_loss=2.5958)
+Epoch 5/50 | Train Loss=2.8110 Val Loss=2.3322 | Train ClsAcc=0.4279 Val ClsAcc=0.5563 | Train Det@0.5=0.9217 Val Det@0.5=0.9187 | 
+Train Seg mIoU=0.8323 (hand=0.6756, background=0.9890) | Train Dice=0.8064
+Val Seg mIoU=0.8474 (hand=0.7037, background=0.9910) | Val Dice=0.8261
+Saved new best Stage-2 model (macro_f1=0.5275, dice=0.8261, val_loss=2.3322)
+Epoch 6/50 | Train Loss=2.6390 Val Loss=2.5085 | Train ClsAcc=0.4704 Val ClsAcc=0.4813 | Train Det@0.5=0.9208 Val Det@0.5=0.9344 | 
+Train Seg mIoU=0.8412 (hand=0.6925, background=0.9899) | Train Dice=0.8183
+Val Seg mIoU=0.8451 (hand=0.6993, background=0.9910) | Val Dice=0.8230
+Epoch 7/50 | Train Loss=2.4643 Val Loss=2.0999 | Train ClsAcc=0.5171 Val ClsAcc=0.6969 | Train Det@0.5=0.9200 Val Det@0.5=0.9437 | 
+Train Seg mIoU=0.8477 (hand=0.7049, background=0.9905) | Train Dice=0.8269
+Val Seg mIoU=0.8630 (hand=0.7342, background=0.9917) | Val Dice=0.8468
+Saved new best Stage-2 model (macro_f1=0.6945, dice=0.8468, val_loss=2.0999)
+Epoch 8/50 | Train Loss=2.3008 Val Loss=2.2328 | Train ClsAcc=0.5579 Val ClsAcc=0.6312 | Train Det@0.5=0.9279 Val Det@0.5=0.9313 | 
+Train Seg mIoU=0.8514 (hand=0.7120, background=0.9908) | Train Dice=0.8318
+Val Seg mIoU=0.8619 (hand=0.7323, background=0.9916) | Val Dice=0.8455
+Epoch 9/50 | Train Loss=2.1730 Val Loss=2.2187 | Train ClsAcc=0.6067 Val ClsAcc=0.5500 | Train Det@0.5=0.9313 Val Det@0.5=0.9750 | 
+Train Seg mIoU=0.8575 (hand=0.7236, background=0.9913) | Train Dice=0.8396
+Val Seg mIoU=0.8700 (hand=0.7475, background=0.9925) | Val Dice=0.8555
+Epoch 10/50 | Train Loss=2.0578 Val Loss=1.9109 | Train ClsAcc=0.6188 Val ClsAcc=0.7188 | Train Det@0.5=0.9350 Val Det@0.5=0.9563 | 
+Train Seg mIoU=0.8612 (hand=0.7308, background=0.9917) | Train Dice=0.8445
+Val Seg mIoU=0.8628 (hand=0.7339, background=0.9917) | Val Dice=0.8466
+Saved new best Stage-2 model (macro_f1=0.7211, dice=0.8466, val_loss=1.9109)
+Epoch 11/50 | Train Loss=1.9537 Val Loss=1.8739 | Train ClsAcc=0.6408 Val ClsAcc=0.7063 | Train Det@0.5=0.9396 Val Det@0.5=0.9500 | 
+Train Seg mIoU=0.8674 (hand=0.7426, background=0.9921) | Train Dice=0.8523
+Val Seg mIoU=0.8748 (hand=0.7569, background=0.9926) | Val Dice=0.8616
+Saved new best Stage-2 model (macro_f1=0.7069, dice=0.8616, val_loss=1.8739)
+Epoch 12/50 | Train Loss=1.8673 Val Loss=1.9124 | Train ClsAcc=0.6550 Val ClsAcc=0.6687 | Train Det@0.5=0.9413 Val Det@0.5=0.9469 | 
+Train Seg mIoU=0.8686 (hand=0.7451, background=0.9922) | Train Dice=0.8539
+Val Seg mIoU=0.8655 (hand=0.7387, background=0.9924) | Val Dice=0.8497
+Epoch 13/50 | Train Loss=1.7727 Val Loss=1.9654 | Train ClsAcc=0.6825 Val ClsAcc=0.6719 | Train Det@0.5=0.9387 Val Det@0.5=0.9531 | 
+Train Seg mIoU=0.8719 (hand=0.7512, background=0.9925) | Train Dice=0.8580
+Val Seg mIoU=0.8646 (hand=0.7373, background=0.9919) | Val Dice=0.8488
+Epoch 14/50 | Train Loss=1.7179 Val Loss=1.6054 | Train ClsAcc=0.6946 Val ClsAcc=0.7781 | Train Det@0.5=0.9483 Val Det@0.5=0.9688 | 
+Train Seg mIoU=0.8720 (hand=0.7515, background=0.9925) | Train Dice=0.8581
+Val Seg mIoU=0.8653 (hand=0.7385, background=0.9920) | Val Dice=0.8496
+Saved new best Stage-2 model (macro_f1=0.7812, dice=0.8496, val_loss=1.6054)
+Epoch 15/50 | Train Loss=1.6213 Val Loss=1.6622 | Train ClsAcc=0.7163 Val ClsAcc=0.7594 | Train Det@0.5=0.9500 Val Det@0.5=0.9563 | 
+Train Seg mIoU=0.8765 (hand=0.7602, background=0.9929) | Train Dice=0.8638
+Val Seg mIoU=0.8652 (hand=0.7380, background=0.9924) | Val Dice=0.8492
+Epoch 16/50 | Train Loss=1.5739 Val Loss=1.5448 | Train ClsAcc=0.7096 Val ClsAcc=0.7937 | Train Det@0.5=0.9479 Val Det@0.5=0.9625 | 
+Train Seg mIoU=0.8797 (hand=0.7664, background=0.9931) | Train Dice=0.8678
+Val Seg mIoU=0.8788 (hand=0.7645, background=0.9932) | Val Dice=0.8665
+Saved new best Stage-2 model (macro_f1=0.7958, dice=0.8665, val_loss=1.5448)
+Epoch 17/50 | Train Loss=1.5166 Val Loss=1.5331 | Train ClsAcc=0.7338 Val ClsAcc=0.8000 | Train Det@0.5=0.9500 Val Det@0.5=0.9594 | 
+Train Seg mIoU=0.8794 (hand=0.7659, background=0.9930) | Train Dice=0.8674
+Val Seg mIoU=0.8766 (hand=0.7606, background=0.9927) | Val Dice=0.8640
+Saved new best Stage-2 model (macro_f1=0.7990, dice=0.8640, val_loss=1.5331)
+Epoch 18/50 | Train Loss=1.4639 Val Loss=1.4823 | Train ClsAcc=0.7404 Val ClsAcc=0.7750 | Train Det@0.5=0.9550 Val Det@0.5=0.9812 | 
+Train Seg mIoU=0.8813 (hand=0.7694, background=0.9932) | Train Dice=0.8697
+Val Seg mIoU=0.8771 (hand=0.7614, background=0.9927) | Val Dice=0.8645
+Saved new best Stage-2 model (macro_f1=0.7734, dice=0.8645, val_loss=1.4823)
+Epoch 19/50 | Train Loss=1.4063 Val Loss=1.4054 | Train ClsAcc=0.7596 Val ClsAcc=0.8281 | Train Det@0.5=0.9521 Val Det@0.5=0.9719 | 
+Train Seg mIoU=0.8849 (hand=0.7764, background=0.9934) | Train Dice=0.8741
+Val Seg mIoU=0.8915 (hand=0.7892, background=0.9939) | Val Dice=0.8822
+Saved new best Stage-2 model (macro_f1=0.8306, dice=0.8822, val_loss=1.4054)
+Epoch 20/50 | Train Loss=1.3431 Val Loss=1.4164 | Train ClsAcc=0.7617 Val ClsAcc=0.8031 | Train Det@0.5=0.9571 Val Det@0.5=0.9688 | 
+Train Seg mIoU=0.8852 (hand=0.7771, background=0.9934) | Train Dice=0.8745
+Val Seg mIoU=0.8727 (hand=0.7523, background=0.9930) | Val Dice=0.8587
+Epoch 21/50 | Train Loss=1.2857 Val Loss=1.3229 | Train ClsAcc=0.7717 Val ClsAcc=0.8000 | Train Det@0.5=0.9583 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.8878 (hand=0.7820, background=0.9936) | Train Dice=0.8776
+Val Seg mIoU=0.8959 (hand=0.7977, background=0.9941) | Val Dice=0.8874
+Saved new best Stage-2 model (macro_f1=0.7992, dice=0.8874, val_loss=1.3229)
+Epoch 22/50 | Train Loss=1.2332 Val Loss=1.2819 | Train ClsAcc=0.7950 Val ClsAcc=0.8375 | Train Det@0.5=0.9617 Val Det@0.5=0.9812 | 
+Train Seg mIoU=0.8894 (hand=0.7852, background=0.9937) | Train Dice=0.8797
+Val Seg mIoU=0.8898 (hand=0.7858, background=0.9938) | Val Dice=0.8800
+Saved new best Stage-2 model (macro_f1=0.8408, dice=0.8800, val_loss=1.2819)
+Epoch 23/50 | Train Loss=1.2167 Val Loss=1.2758 | Train ClsAcc=0.7917 Val ClsAcc=0.8406 | Train Det@0.5=0.9608 Val Det@0.5=0.9688 | 
+Train Seg mIoU=0.8914 (hand=0.7891, background=0.9938) | Train Dice=0.8821
+Val Seg mIoU=0.9005 (hand=0.8067, background=0.9943) | Val Dice=0.8930
+Saved new best Stage-2 model (macro_f1=0.8427, dice=0.8930, val_loss=1.2758)
+Epoch 24/50 | Train Loss=1.1791 Val Loss=1.2347 | Train ClsAcc=0.8075 Val ClsAcc=0.8344 | Train Det@0.5=0.9575 Val Det@0.5=0.9812 | 
+Train Seg mIoU=0.8932 (hand=0.7925, background=0.9940) | Train Dice=0.8843
+Val Seg mIoU=0.8953 (hand=0.7967, background=0.9938) | Val Dice=0.8869
+Saved new best Stage-2 model (macro_f1=0.8334, dice=0.8869, val_loss=1.2347)
+Epoch 25/50 | Train Loss=1.1408 Val Loss=1.1949 | Train ClsAcc=0.8100 Val ClsAcc=0.8469 | Train Det@0.5=0.9621 Val Det@0.5=0.9750 | 
+Train Seg mIoU=0.8949 (hand=0.7958, background=0.9941) | Train Dice=0.8863
+Val Seg mIoU=0.8827 (hand=0.7718, background=0.9936) | Val Dice=0.8712
+Saved new best Stage-2 model (macro_f1=0.8505, dice=0.8712, val_loss=1.1949)
+Epoch 26/50 | Train Loss=1.1147 Val Loss=1.1299 | Train ClsAcc=0.8217 Val ClsAcc=0.8781 | Train Det@0.5=0.9621 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.8942 (hand=0.7943, background=0.9940) | Train Dice=0.8854
+Val Seg mIoU=0.8845 (hand=0.7753, background=0.9937) | Val Dice=0.8734
+Saved new best Stage-2 model (macro_f1=0.8790, dice=0.8734, val_loss=1.1299)
+Epoch 27/50 | Train Loss=1.1227 Val Loss=1.1672 | Train ClsAcc=0.8108 Val ClsAcc=0.8594 | Train Det@0.5=0.9658 Val Det@0.5=0.9719 | 
+Train Seg mIoU=0.8927 (hand=0.7915, background=0.9939) | Train Dice=0.8836
+Val Seg mIoU=0.8982 (hand=0.8020, background=0.9943) | Val Dice=0.8901
+Epoch 28/50 | Train Loss=1.0823 Val Loss=1.0770 | Train ClsAcc=0.8187 Val ClsAcc=0.8938 | Train Det@0.5=0.9654 Val Det@0.5=0.9875 | 
+Train Seg mIoU=0.8949 (hand=0.7958, background=0.9941) | Train Dice=0.8863
+Val Seg mIoU=0.9030 (hand=0.8115, background=0.9946) | Val Dice=0.8959
+Saved new best Stage-2 model (macro_f1=0.8942, dice=0.8959, val_loss=1.0770)
+Epoch 29/50 | Train Loss=1.0545 Val Loss=1.1289 | Train ClsAcc=0.8246 Val ClsAcc=0.8719 | Train Det@0.5=0.9675 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.8982 (hand=0.8022, background=0.9942) | Train Dice=0.8903
+Val Seg mIoU=0.8991 (hand=0.8037, background=0.9944) | Val Dice=0.8912
+Epoch 30/50 | Train Loss=1.0309 Val Loss=1.0441 | Train ClsAcc=0.8354 Val ClsAcc=0.8938 | Train Det@0.5=0.9696 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.8990 (hand=0.8036, background=0.9943) | Train Dice=0.8911
+Val Seg mIoU=0.9074 (hand=0.8201, background=0.9948) | Val Dice=0.9011
+Saved new best Stage-2 model (macro_f1=0.8939, dice=0.9011, val_loss=1.0441)
+Epoch 31/50 | Train Loss=1.0041 Val Loss=1.0513 | Train ClsAcc=0.8396 Val ClsAcc=0.8812 | Train Det@0.5=0.9671 Val Det@0.5=0.9781 | 
+Train Seg mIoU=0.9030 (hand=0.8115, background=0.9946) | Train Dice=0.8960
+Val Seg mIoU=0.9006 (hand=0.8067, background=0.9944) | Val Dice=0.8930
+Epoch 32/50 | Train Loss=0.9660 Val Loss=1.0166 | Train ClsAcc=0.8479 Val ClsAcc=0.8969 | Train Det@0.5=0.9692 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9023 (hand=0.8101, background=0.9945) | Train Dice=0.8951
+Val Seg mIoU=0.9054 (hand=0.8161, background=0.9947) | Val Dice=0.8988
+Saved new best Stage-2 model (macro_f1=0.8968, dice=0.8988, val_loss=1.0166)
+Epoch 33/50 | Train Loss=0.9400 Val Loss=0.9803 | Train ClsAcc=0.8600 Val ClsAcc=0.9156 | Train Det@0.5=0.9712 Val Det@0.5=0.9812 | 
+Train Seg mIoU=0.9022 (hand=0.8099, background=0.9945) | Train Dice=0.8950
+Val Seg mIoU=0.9063 (hand=0.8178, background=0.9947) | Val Dice=0.8998
+Saved new best Stage-2 model (macro_f1=0.9144, dice=0.8998, val_loss=0.9803)
+Epoch 34/50 | Train Loss=0.9380 Val Loss=1.0035 | Train ClsAcc=0.8662 Val ClsAcc=0.8844 | Train Det@0.5=0.9671 Val Det@0.5=0.9781 | 
+Train Seg mIoU=0.9034 (hand=0.8122, background=0.9946) | Train Dice=0.8963
+Val Seg mIoU=0.9096 (hand=0.8243, background=0.9949) | Val Dice=0.9037
+Epoch 35/50 | Train Loss=0.9055 Val Loss=1.0195 | Train ClsAcc=0.8608 Val ClsAcc=0.8875 | Train Det@0.5=0.9746 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9045 (hand=0.8144, background=0.9946) | Train Dice=0.8977
+Val Seg mIoU=0.9046 (hand=0.8146, background=0.9947) | Val Dice=0.8978
+Epoch 36/50 | Train Loss=0.9106 Val Loss=0.9930 | Train ClsAcc=0.8625 Val ClsAcc=0.8969 | Train Det@0.5=0.9733 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9032 (hand=0.8118, background=0.9946) | Train Dice=0.8961
+Val Seg mIoU=0.9065 (hand=0.8183, background=0.9948) | Val Dice=0.9000
+Epoch 37/50 | Train Loss=0.9049 Val Loss=0.9750 | Train ClsAcc=0.8612 Val ClsAcc=0.9000 | Train Det@0.5=0.9733 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9066 (hand=0.8184, background=0.9948) | Train Dice=0.9001
+Val Seg mIoU=0.9080 (hand=0.8211, background=0.9948) | Val Dice=0.9018
+Saved new best Stage-2 model (macro_f1=0.8995, dice=0.9018, val_loss=0.9750)
+Epoch 38/50 | Train Loss=0.8678 Val Loss=0.9868 | Train ClsAcc=0.8712 Val ClsAcc=0.9000 | Train Det@0.5=0.9717 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9050 (hand=0.8154, background=0.9947) | Train Dice=0.8983
+Val Seg mIoU=0.9081 (hand=0.8214, background=0.9949) | Val Dice=0.9019
+Epoch 39/50 | Train Loss=0.8574 Val Loss=0.9890 | Train ClsAcc=0.8758 Val ClsAcc=0.9000 | Train Det@0.5=0.9725 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9072 (hand=0.8197, background=0.9948) | Train Dice=0.9009
+Val Seg mIoU=0.9097 (hand=0.8245, background=0.9949) | Val Dice=0.9038
+Epoch 40/50 | Train Loss=0.8558 Val Loss=0.9874 | Train ClsAcc=0.8800 Val ClsAcc=0.8875 | Train Det@0.5=0.9758 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9062 (hand=0.8176, background=0.9947) | Train Dice=0.8997
+Val Seg mIoU=0.9066 (hand=0.8185, background=0.9948) | Val Dice=0.9002
+Epoch 41/50 | Train Loss=0.8443 Val Loss=0.9237 | Train ClsAcc=0.8904 Val ClsAcc=0.9031 | Train Det@0.5=0.9712 Val Det@0.5=0.9875 | 
+Train Seg mIoU=0.9069 (hand=0.8190, background=0.9948) | Train Dice=0.9005
+Val Seg mIoU=0.9089 (hand=0.8228, background=0.9949) | Val Dice=0.9028
+Saved new best Stage-2 model (macro_f1=0.9014, dice=0.9028, val_loss=0.9237)
+Epoch 42/50 | Train Loss=0.8469 Val Loss=0.9505 | Train ClsAcc=0.8850 Val ClsAcc=0.8906 | Train Det@0.5=0.9700 Val Det@0.5=0.9875 | 
+Train Seg mIoU=0.9083 (hand=0.8218, background=0.9949) | Train Dice=0.9022
+Val Seg mIoU=0.9110 (hand=0.8269, background=0.9950) | Val Dice=0.9053
+Epoch 43/50 | Train Loss=0.8437 Val Loss=0.9219 | Train ClsAcc=0.8812 Val ClsAcc=0.9000 | Train Det@0.5=0.9758 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9090 (hand=0.8231, background=0.9949) | Train Dice=0.9029
+Val Seg mIoU=0.9093 (hand=0.8238, background=0.9949) | Val Dice=0.9034
+Saved new best Stage-2 model (macro_f1=0.9000, dice=0.9034, val_loss=0.9219)
+Epoch 44/50 | Train Loss=0.8214 Val Loss=0.9367 | Train ClsAcc=0.8904 Val ClsAcc=0.8938 | Train Det@0.5=0.9738 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9080 (hand=0.8211, background=0.9949) | Train Dice=0.9018
+Val Seg mIoU=0.9107 (hand=0.8264, background=0.9950) | Val Dice=0.9050
+Epoch 45/50 | Train Loss=0.8181 Val Loss=0.9257 | Train ClsAcc=0.8896 Val ClsAcc=0.9094 | Train Det@0.5=0.9742 Val Det@0.5=0.9812 | 
+Train Seg mIoU=0.9083 (hand=0.8217, background=0.9949) | Train Dice=0.9021
+Val Seg mIoU=0.9103 (hand=0.8257, background=0.9950) | Val Dice=0.9045
+Epoch 46/50 | Train Loss=0.8131 Val Loss=0.9066 | Train ClsAcc=0.8888 Val ClsAcc=0.9187 | Train Det@0.5=0.9738 Val Det@0.5=0.9812 | 
+Train Seg mIoU=0.9088 (hand=0.8226, background=0.9949) | Train Dice=0.9027
+Val Seg mIoU=0.9121 (hand=0.8291, background=0.9951) | Val Dice=0.9066
+Saved new best Stage-2 model (macro_f1=0.9190, dice=0.9066, val_loss=0.9066)
+Epoch 47/50 | Train Loss=0.7964 Val Loss=0.9067 | Train ClsAcc=0.8996 Val ClsAcc=0.9187 | Train Det@0.5=0.9771 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9078 (hand=0.8208, background=0.9948) | Train Dice=0.9016
+Val Seg mIoU=0.9116 (hand=0.8281, background=0.9951) | Val Dice=0.9060
+Epoch 48/50 | Train Loss=0.8109 Val Loss=0.9106 | Train ClsAcc=0.8925 Val ClsAcc=0.8969 | Train Det@0.5=0.9762 Val Det@0.5=0.9875 | 
+Train Seg mIoU=0.9082 (hand=0.8216, background=0.9949) | Train Dice=0.9020
+Val Seg mIoU=0.9118 (hand=0.8285, background=0.9951) | Val Dice=0.9062
+Epoch 49/50 | Train Loss=0.7881 Val Loss=0.9283 | Train ClsAcc=0.8975 Val ClsAcc=0.9062 | Train Det@0.5=0.9767 Val Det@0.5=0.9812 | 
+Train Seg mIoU=0.9105 (hand=0.8260, background=0.9950) | Train Dice=0.9047
+Val Seg mIoU=0.9111 (hand=0.8272, background=0.9950) | Val Dice=0.9054
+Epoch 50/50 | Train Loss=0.8204 Val Loss=0.9097 | Train ClsAcc=0.8888 Val ClsAcc=0.9094 | Train Det@0.5=0.9692 Val Det@0.5=0.9844 | 
+Train Seg mIoU=0.9075 (hand=0.8202, background=0.9948) | Train Dice=0.9012
+Val Seg mIoU=0.9105 (hand=0.8259, background=0.9950) | Val Dice=0.9047
 
 Class Names: call, dislike, like, ok, one, palm, peace, rock, stop, three

@@ -1,0 +1,31 @@
+Using device: cuda
+Model: rgb_v1
+Stage: s2
+Loaded weights: weights/rgb_v1/s2/default/best_model.pth
+Evaluating: dataset/dataset_v1/test
+----------------------------------------
+EVALUATION RESULTS
+----------------------------------------
+Total Samples Tested : 3450
+Image Classifier Top-1: 81.54%
+Classification Macro F1: 0.8166
+Confusion Matrix (rows=true, cols=pred):
+true\pred         call    dislike       like         ok        one       palm      peace       rock       stop      three
+call               295         19          1          2          7          0          0          5         16          0
+dislike             36        256         13          0         11          0          0          1         28          0
+like                26          3        279          0          2          0          0          1         34          0
+ok                  19          0          1        245          1         51         10          0         15          3
+one                  2          4         45          0        267          0          1          0         26          0
+palm                 0          0          0         13          0        317          0          0         15          0
+peace                0          1          2          4          4          0        269         25         17         23
+rock                12          9         16          0          1          0          2        287         16          2
+stop                 0          6         11          3          0          1          0          0        324          0
+three                0          1          2          5          0          9         28         11         15        274
+Detector Class Top-1 : 82.93%
+Detection Acc@IoU0.5 : 89.16%
+Mean Bounding Box IoU: 0.7493
+Segmentation mIoU    : 0.7878 (hand=0.5920, background=0.9836)
+Segmentation Dice    : 0.7437
+Inference Speed      : 781.99 img/s | 1.28 ms/img | 10.21 ms/batch
+Confusion matrix saved to results/rgb_v1/eval/s2/default/classification_confusion_matrix.png
+Metrics JSON saved to results/rgb_v1/eval/s2/default/metrics.json

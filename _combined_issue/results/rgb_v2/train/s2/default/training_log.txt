@@ -1,2 +1,0 @@
-Using device: cuda
-Loaded Stage-1 weights from _combined_issue/weights/rgb_v2/s1/default/best_model.pth
