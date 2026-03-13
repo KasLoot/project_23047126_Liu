@@ -1,4 +1,4 @@
-# Hand Gesture Multi-Task Framework (`src`)
+# Hand Gesture Multi-Task
 
 This directory contains the source code for training, evaluating, and visualizing a multi-task framework designed for Hand Gesture Recognition. The models jointly tackle Object Detection, Image Classification, and Semantic Segmentation.
 
