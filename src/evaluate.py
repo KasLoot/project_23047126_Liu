@@ -237,7 +237,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, choices=["rgb_v1", "rgb_v2", "rgb_v3", "rgb_v4"], default="rgb_v2")
     parser.add_argument("--stage", type=str, choices=["s1", "s2"], default="s2")
     parser.add_argument("--weights", type=str, default=None, help="Optional checkpoint path override")
-    parser.add_argument("--data_dir", type=str, default="dataset/dataset_v1/val")
+    parser.add_argument("--data_dir", type=str, default="dataset/dataset_v1/test")
     parser.add_argument("--num_classes", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_workers", type=int, default=4)

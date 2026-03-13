@@ -2,30 +2,30 @@ Using device: cuda
 Model: rgb_v2
 Stage: s2
 Loaded weights: weights/rgb_v2/s2/default/best_model.pth
-Evaluating: dataset/dataset_v1/val
+Evaluating: dataset/dataset_v1/test
 ----------------------------------------
 EVALUATION RESULTS
 ----------------------------------------
-Total Samples Tested : 320
-Image Classifier Top-1: 91.25%
-Classification Macro F1: 0.9123
+Total Samples Tested : 3450
+Image Classifier Top-1: 81.13%
+Classification Macro F1: 0.8152
 Confusion Matrix (rows=true, cols=pred):
 true\pred         call    dislike       like         ok        one       palm      peace       rock       stop      three
-call                25          3          4          0          0          0          0          0          0          0
-dislike              0         32          0          0          0          0          0          0          0          0
-like                 0          1         30          0          0          0          0          0          0          1
-ok                   0          0          0         27          1          2          1          0          0          1
-one                  0          0          1          0         29          0          0          1          1          0
-palm                 0          0          0          0          0         31          0          1          0          0
-peace                0          0          1          0          0          0         28          1          0          2
-rock                 0          0          1          0          0          0          0         29          1          1
-stop                 0          0          0          0          0          0          0          0         31          1
-three                0          0          0          1          0          0          0          0          1         30
-Detector Class Top-1 : 91.25%
-Detection Acc@IoU0.5 : 99.06%
-Mean Bounding Box IoU: 0.8362
-Segmentation mIoU    : 0.9128 (hand=0.8304, background=0.9952)
-Segmentation Dice    : 0.9073
-Inference Speed      : 602.18 img/s | 1.66 ms/img | 13.29 ms/batch
+call               290          9          6          1         11          0          2         18          2          6
+dislike             54        260          0          1         12          0          3          2         13          0
+like                26          0        271          1         11          1          2          8         25          0
+ok                  23          1          4        265          2         16         11          0         13         10
+one                 18          1         40          3        247          0         19          2         15          0
+palm                16          0          6         20          3        296          0          3          1          0
+peace               16          0          9          7          1          0        288         12          0         12
+rock                35          1          5          1          5          0          1        293          0          4
+stop                17          1         12          3          2          1          0          0        309          0
+three               20          0         14         15          0          2         13          1          0        280
+Detector Class Top-1 : 81.71%
+Detection Acc@IoU0.5 : 89.19%
+Mean Bounding Box IoU: 0.7525
+Segmentation mIoU    : 0.8547 (hand=0.7188, background=0.9907)
+Segmentation Dice    : 0.8364
+Inference Speed      : 647.72 img/s | 1.54 ms/img | 12.33 ms/batch
 Confusion matrix saved to results/rgb_v2/eval/s2/default/classification_confusion_matrix.png
 Metrics JSON saved to results/rgb_v2/eval/s2/default/metrics.json

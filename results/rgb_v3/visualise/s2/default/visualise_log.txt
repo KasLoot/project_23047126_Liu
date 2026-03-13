@@ -1,0 +1,19 @@
+Model: rgb_v3
+Stage: s2
+Loaded weights: weights/rgb_v3/s2/default/best_model.pth
+Best Rank 01 | Sample 0688 | Cls true=stop pred=stop (0.96) | Det pred=stop (0.78) | IoU=0.92 | Seg mIoU=0.98 | Dice=0.98
+Best Rank 02 | Sample 0333 | Cls true=three pred=three (0.94) | Det pred=three (0.80) | IoU=0.89 | Seg mIoU=0.98 | Dice=0.98
+Best Rank 03 | Sample 2743 | Cls true=like pred=like (0.61) | Det pred=like (0.42) | IoU=0.80 | Seg mIoU=0.98 | Dice=0.98
+Best Rank 04 | Sample 1722 | Cls true=palm pred=palm (0.98) | Det pred=palm (0.78) | IoU=0.91 | Seg mIoU=0.98 | Dice=0.98
+Best Rank 05 | Sample 3339 | Cls true=call pred=call (0.98) | Det pred=call (0.73) | IoU=0.87 | Seg mIoU=0.98 | Dice=0.98
+Best Rank 06 | Sample 1742 | Cls true=one pred=one (0.97) | Det pred=one (0.64) | IoU=0.83 | Seg mIoU=0.98 | Dice=0.98
+Best Rank 07 | Sample 0925 | Cls true=rock pred=rock (0.92) | Det pred=rock (0.65) | IoU=0.87 | Seg mIoU=0.97 | Dice=0.97
+Best Rank 08 | Sample 1058 | Cls true=peace pred=peace (0.97) | Det pred=peace (0.69) | IoU=0.92 | Seg mIoU=0.97 | Dice=0.97
+Best Rank 09 | Sample 2994 | Cls true=dislike pred=dislike (0.95) | Det pred=dislike (0.70) | IoU=0.85 | Seg mIoU=0.97 | Dice=0.97
+Best Rank 10 | Sample 2305 | Cls true=ok pred=ok (0.71) | Det pred=ok (0.50) | IoU=0.91 | Seg mIoU=0.97 | Dice=0.97
+Worst Rank 01 | Sample 1544 | Cls true=palm pred=stop (0.69) | Det pred=like (0.03) | IoU=0.00 | Seg mIoU=0.47 | Dice=0.00
+Worst Rank 02 | Sample 1543 | Cls true=palm pred=stop (0.72) | Det pred=like (0.02) | IoU=0.00 | Seg mIoU=0.47 | Dice=0.00
+Worst Rank 03 | Sample 1545 | Cls true=palm pred=stop (0.68) | Det pred=like (0.02) | IoU=0.00 | Seg mIoU=0.47 | Dice=0.00
+Worst Rank 04 | Sample 1535 | Cls true=palm pred=stop (0.70) | Det pred=like (0.02) | IoU=0.00 | Seg mIoU=0.47 | Dice=0.00
+Worst Rank 05 | Sample 1536 | Cls true=palm pred=stop (0.69) | Det pred=like (0.02) | IoU=0.00 | Seg mIoU=0.47 | Dice=0.00
+Saved 10 best and 5 worst visualisations to results/rgb_v3/visualise/s2/default
